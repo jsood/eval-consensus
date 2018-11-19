@@ -1,12 +1,8 @@
 import sys
 import time
 import random
-from logger import logger
 
-# python -m da stats_monitor.da
-log_file = "vrpaxos.log"
-
-NOPS = 1  # number of different operations that the state machine can do
+NOPS = 10  # number of different operations that the state machine can do
 # operation i maps a state to a pair of new state and result of i on state
 def operation(i): return lambda state: (state+[i], ['result',i,'on',state])
 operations = {i: operation(i) for i in range(NOPS)}
@@ -18,10 +14,6 @@ class Replica(process):
     def setup(leaders:set, initial_state:list):
         self.state = initial_state;  self.slot_num = 1
         self.proposals = set();  self.decisions = set()
-        # added code for logging    
-        self.clock = 1
-        # logging initializing info
-        logger.info("{0} {{\"{0}\":{1}}} Initialization complete".format(self, self.clock))
 
     def propose(p):
         if not some((_, _p) in decisions):
@@ -50,12 +42,8 @@ class Replica(process):
         await(received(('done',)))
         output('terminating')
 
-    def receive(msg= ('request', p, clk)):
+    def receive(msg= ('request', p)):
         debug('### request', p)
-        clock += 1
-        # logging received message info
-        #print(self, self.clock, "Received request from client", p[0])
-        logger.info("{0} {{\"{0}\":{1}, \"{2}\":{3}}} Received request from client".format(self, self.clock, p[0], clk))
         propose(p)
 
     def receive(msg= ('decision', s, p)):
@@ -169,17 +157,10 @@ class Client(process):
         self.cid = 0           # command id
         self.results = dict()  # map of command id to result of command
         self.count = dict()    # map of command id to number of responses
-        # added code for logging
-        self.clock = 1
-        # initializing the client node
-        logger.info("{0} {{\"{0}\":{1}}} Initialization complete".format(self, self.clock))
 
     def run():
         for i in range(nops):
-            self.clock += 1
-            # sending the message from client to all replicas
-            logger.info("{0} {{\"{0}\":{1}}} Sending request to all replicas.".format(self, self.clock))
-            send(('request', (self, cid, random.randint(0, NOPS-1)), self.clock),
+            send(('request', (self, cid, random.randint(0, NOPS-1))),
                  to= replicas)
             await(cid in results)
             output('received result', cid, results[cid])
@@ -208,9 +189,6 @@ def main():
     leaders = new(Leader, (acceptors, replicas), num= nleaders)
     initial_state = [];  setup(replicas, (leaders, initial_state))
     clients = new(Client, (replicas, nops), num= nclients)
-
-    # TODO: make changes in the logger to start fresh log file each time
-    # we use the logger to avoid opening/closing log file each time we want to write something
 
     start(acceptors)
     start(replicas | leaders)
