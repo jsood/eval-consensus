@@ -10,4 +10,6 @@ command used to generate vrpaxos.log:
 python -m da orig.da 3 2 1 1 1
 
 copy-paste contents of vrpaxos.log into shiviz tool. Use following as log parsing regular expression:
+```
 (?<host>\S*) (?<clock>{.*})\ (?<event>.*)
+```
