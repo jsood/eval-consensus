@@ -1,0 +1,228 @@
+import sys
+import time
+import random
+from logger import logger
+
+# python -m da stats_monitor.da
+log_file = "vrpaxos.log"
+
+NOPS = 1  # number of different operations that the state machine can do
+# operation i maps a state to a pair of new state and result of i on state
+def operation(i): return lambda state: (state+[i], ['result',i,'on',state])
+operations = {i: operation(i) for i in range(NOPS)}
+
+# wrong: all closures get i = NOPS - 1
+# ops = {i: (lambda state: (state+[i], ['res',i]+state)) for i in range(NOPS)}
+
+class Replica(process):
+    def setup(leaders:set, initial_state:list):
+        self.state = initial_state;  self.slot_num = 1
+        self.proposals = set();  self.decisions = set()
+        # added code for logging    
+        self.clock = 1
+        # logging initializing info
+        logger.info("{0} {{\"{0}\":{1}}} Initialization complete".format(self, self.clock))
+
+    def propose(p):
+        if not some((_, _p) in decisions):
+            # find the maximum used slot number, or 0
+            maxs = max(setof(s, (s, _) in proposals | decisions) or {0})
+            # within the maximum + 1, find smallest not yet used
+            s1 = min(setof(s, s in range(1, maxs + 1 + 1),
+                           not some((_s, _) in proposals | decisions)))
+            proposals.add((s1, p))
+            send(('propose', s1, p), to= leaders)
+
+    def perform(p):
+        debug('### perform', p)
+        client, cid, op = p
+        if some((s, _p) in decisions, has= s < slot_num):
+            slot_num += 1
+        else:
+            debug('===', state, op)
+            next, result = operations[op](state)
+            debug('===', next, result)
+            state = next; slot_num += 1
+            send(('response', cid, result), to= client)
+
+    def run():
+        debug('### start')
+        await(received(('done',)))
+        output('terminating')
+
+    def receive(msg= ('request', p, clk)):
+        debug('### request', p)
+        clock += 1
+        # logging received message info
+        #print(self, self.clock, "Received request from client", p[0])
+        logger.info("{0} {{\"{0}\":{1}, \"{2}\":{3}}} Received request from client".format(self, self.clock, p[0], clk))
+        propose(p)
+
+    def receive(msg= ('decision', s, p)):
+        debug('### decision', s, p)
+        decisions.add((s, p))
+        while some((_slot_num, p1) in decisions):
+            if some((_slot_num, p2) in proposals, has= p2 != p1):
+                propose(p2)
+            perform(p1)
+
+class Acceptor(process):
+    def setup():
+        self.ballot_num = None;  self.accepted = set()
+
+    def run():
+        debug('### start')
+        await(received(('done',)))
+        output('terminating')
+
+    def receive(msg= m):
+        BOTTOM = (-1, -1);
+        ballot_num = max((setof(b, received(('p1a', _, b))) |
+                          setof(b, received(('p2a', _, b, _, _)))) or {BOTTOM})
+
+    def receive(msg= ('p1a', leader_scout, b)):
+        debug('### p1a', leader_scout, b)
+        send(('p1b', self, ballot_num, accepted), to= leader_scout)
+
+    def receive(msg= ('p2a', leader_commander, b, s, p)):
+        debug('### p2a', leader_commander, b, s, p)
+        if b == ballot_num : accepted.add((b, s, p))
+        send(('p2b', self, ballot_num), to= leader_commander)
+
+class Commander(process):
+    def setup(leader:Leader, acceptors:set, replicas:set,
+              b, s, p): pass
+
+    def run():
+        debug('### start')
+        send(('p2a', self, b, s, p), to= acceptors)
+        if await(len(setof(a, received(('p2b', a, _b)))) > len(acceptors)/2):
+            send(('decision', s, p), to= replicas)
+        elif some(received(('p2b', _, b1)), has= b1 != b):
+            send(('preempted', b1), to= leader)
+
+class Scout(process):
+    def setup(leader, acceptors:set, b):
+        self.pvalues = set()
+
+    def run():
+        debug('### start')
+# add sleep
+        time.sleep(random.random()) # next random float in [0.0, 1.0)
+        send(('p1a', self, b), to= acceptors)
+        if await(len(setof(a, received(('p1b', a, _b, _)))) > len(acceptors)/2):
+            pvalues = setof(v, received(('p1b', _, _b, r)), v in r) #accepted
+            send(('adopted', b, pvalues), to= leader)
+        elif some(received(('p1b', a, b1, _)), has= b1 != b):
+            send(('preempted', b1), to= leader)
+
+class Leader(process):
+    def setup(acceptors:set, replicas:set):
+        self.ballot_num = (0, self);
+        self.active = False;  self.proposals = set()
+
+    def run():
+        debug('### start')
+        sub = new(Scout, (self, acceptors, ballot_num),
+                  method='thread', daemon=True)
+        start(sub)
+        await(received(('done',)))
+        output('terminating')
+
+    def receive(msg= ('propose', s, p)):
+        debug('### propose', s, p)
+        if not some((_s, _) in proposals):
+            proposals.add((s,p))
+            if active:
+                sub = new(Commander,
+                          (self, acceptors, replicas, ballot_num, s, p),
+                          method='thread', daemon=True)
+                start(sub)
+
+    def receive(msg= ('adopted', ballot_num, pvals)):
+        debug('### adopted', ballot_num, pvals)
+        proposals = circle_plus(proposals, pmax(pvals))
+        for (s, p) in proposals:
+            sub = new(Commander,
+                      (self, acceptors, replicas, ballot_num, s, p),
+                      method='thread', daemon=True)
+            start(sub)
+        active = True
+
+    def receive(msg= ('preempted', (r1, leader1))):
+        if (r1, leader1) > ballot_num:
+            active = False
+            ballot_num = (r1 + 1, self)
+            sub = new(Scout, (self, acceptors, ballot_num),
+                      method='thread', daemon=True)
+            start(sub)
+
+    def circle_plus(x, y):
+        return y | setof((s, p), (s, p) in x, not some((_s, _) in y))
+
+    def pmax(pvals):
+        return setof((s, p), (b, s, p) in pvals,
+                     each((b1, _s, _) in pvals, has= b1 <= b))
+
+class Client(process):
+    def setup(replicas:set, nops:int):
+        self.cid = 0           # command id
+        self.results = dict()  # map of command id to result of command
+        self.count = dict()    # map of command id to number of responses
+        # added code for logging
+        self.clock = 1
+        # initializing the client node
+        logger.info("{0} {{\"{0}\":{1}}} Initialization complete".format(self, self.clock))
+
+    def run():
+        for i in range(nops):
+            self.clock += 1
+            # sending the message from client to all replicas
+            logger.info("{0} {{\"{0}\":{1}}} Sending request to all replicas.".format(self, self.clock))
+            send(('request', (self, cid, random.randint(0, NOPS-1)), self.clock),
+                 to= replicas)
+            await(cid in results)
+            output('received result', cid, results[cid])
+            cid += 1
+        await(each(cid in range(nops), has= count[cid] == len(replicas)))
+        output('terminating')
+        send(('done',), to=parent())
+
+    def receive(msg= ('response', cid, result)):
+        debug('### response', cid, result)
+        if cid not in results:
+            results[cid] = result
+        elif results[cid] != result:
+            error('different result', cid, result, 'than', results[cid])
+        count[cid] = 1 if cid not in count else count[cid] + 1
+
+def main():
+    nacceptors = int(sys.argv[1]) if len(sys.argv) > 1 else 5
+    nreplicas = int(sys.argv[2]) if len(sys.argv) > 2 else 4
+    nleaders = int(sys.argv[3]) if len(sys.argv) > 3 else 2
+    nclients = int(sys.argv[4]) if len(sys.argv) > 4 else 3
+    nops = int(sys.argv[5]) if len(sys.argv) > 5 else 3
+
+    acceptors = new(Acceptor, (), num= nacceptors)
+    replicas = new(Replica, num= nreplicas)
+    leaders = new(Leader, (acceptors, replicas), num= nleaders)
+    initial_state = [];  setup(replicas, (leaders, initial_state))
+    clients = new(Client, (replicas, nops), num= nclients)
+
+    # TODO: make changes in the logger to start fresh log file each time
+    # we use the logger to avoid opening/closing log file each time we want to write something
+
+    start(acceptors)
+    start(replicas | leaders)
+    start(clients)
+
+    await(each(c in clients, has=received(('done',), from_=c)))
+    output('All clients done.')
+    send(('done',), to= (acceptors|replicas|leaders))
+
+# This code includes setup and termination for each client to request and
+# complete a number of operations.
+
+# Not properly terminating when there are live Commanders or Scounts.
+# This happens usually when there are multiple leaders or clients;
+# adding count in client doesn't help.

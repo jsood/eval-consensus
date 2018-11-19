@@ -1,0 +1,6 @@
+<Replica:28005> {"<Replica:28005>":1} Initialization complete
+<Replica:28006> {"<Replica:28006>":1} Initialization complete
+<Client:28008> {"<Client:28008>":1} Initialization complete
+<Client:28008> {"<Client:28008>":2} Sending request to all replicas.
+<Replica:28006> {"<Replica:28006>":2, "<Client:28008>":2} Received request from client
+<Replica:28005> {"<Replica:28005>":2, "<Client:28008>":2} Received request from client
