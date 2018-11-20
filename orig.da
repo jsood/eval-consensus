@@ -14,6 +14,7 @@ operations = {i: operation(i) for i in range(NOPS)}
 # wrong: all closures get i = NOPS - 1
 # ops = {i: (lambda state: (state+[i], ['res',i]+state)) for i in range(NOPS)}
 
+# Replica proposes commands for slots to leaders
 class Replica(process):
     def setup(leaders:set, initial_state:list):
         self.state = initial_state;  self.slot_num = 1
@@ -43,6 +44,7 @@ class Replica(process):
             next, result = operations[op](state)
             debug('===', next, result)
             state = next; slot_num += 1
+            # send result back to client for a command
             send(('response', cid, result), to= client)
 
     def run():
@@ -50,6 +52,7 @@ class Replica(process):
         await(received(('done',)))
         output('terminating')
 
+    # receive request from client
     def receive(msg= ('request', p, clk)):
         debug('### request', p)
         clock += 1
@@ -58,6 +61,7 @@ class Replica(process):
         logger.info("{0} {{\"{0}\":{1}, \"{2}\":{3}}} Received request from client".format(self, self.clock, p[0], clk))
         propose(p)
 
+    # receives decision from a leader
     def receive(msg= ('decision', s, p)):
         debug('### decision', s, p)
         decisions.add((s, p))
@@ -66,6 +70,7 @@ class Replica(process):
                 propose(p2)
             perform(p1)
 
+# responds to scout and commander
 class Acceptor(process):
     def setup():
         self.ballot_num = None;  self.accepted = set()
@@ -75,20 +80,25 @@ class Acceptor(process):
         await(received(('done',)))
         output('terminating')
 
+    # adopts the maximum ballot number from the set of received requests
     def receive(msg= m):
         BOTTOM = (-1, -1);
         ballot_num = max((setof(b, received(('p1a', _, b))) |
                           setof(b, received(('p2a', _, b, _, _)))) or {BOTTOM})
 
+    # responds to scout with maximum ballot number
     def receive(msg= ('p1a', leader_scout, b)):
         debug('### p1a', leader_scout, b)
         send(('p1b', self, ballot_num, accepted), to= leader_scout)
 
+    # accepts the proposed ballot number if it matches with maximum adopted ballot number.
+    # responds to commander with 
     def receive(msg= ('p2a', leader_commander, b, s, p)):
         debug('### p2a', leader_commander, b, s, p)
         if b == ballot_num : accepted.add((b, s, p))
         send(('p2b', self, ballot_num), to= leader_commander)
 
+# spawned by leader for phase 2a and 2b messages of consensus protocol
 class Commander(process):
     def setup(leader:Leader, acceptors:set, replicas:set,
               b, s, p): pass
@@ -101,13 +111,14 @@ class Commander(process):
         elif some(received(('p2b', _, b1)), has= b1 != b):
             send(('preempted', b1), to= leader)
 
+# spawned by leader for phase 1a and 1b messages of consensus protocol
 class Scout(process):
     def setup(leader, acceptors:set, b):
         self.pvalues = set()
 
     def run():
         debug('### start')
-# add sleep
+        # wait for random amount of time
         time.sleep(random.random()) # next random float in [0.0, 1.0)
         send(('p1a', self, b), to= acceptors)
         if await(len(setof(a, received(('p1b', a, _b, _)))) > len(acceptors)/2):
@@ -116,6 +127,7 @@ class Scout(process):
         elif some(received(('p1b', a, b1, _)), has= b1 != b):
             send(('preempted', b1), to= leader)
 
+# proposes a command to acceptos with ballot number and slot
 class Leader(process):
     def setup(acceptors:set, replicas:set):
         self.ballot_num = (0, self);
@@ -123,6 +135,7 @@ class Leader(process):
 
     def run():
         debug('### start')
+        # spawns a new scout for phase 1a of two-phase commit
         sub = new(Scout, (self, acceptors, ballot_num),
                   method='thread', daemon=True)
         start(sub)
@@ -164,6 +177,7 @@ class Leader(process):
         return setof((s, p), (b, s, p) in pvals,
                      each((b1, _s, _) in pvals, has= b1 <= b))
 
+# client sends request to replicas for creating consensus for a command
 class Client(process):
     def setup(replicas:set, nops:int):
         self.cid = 0           # command id
@@ -177,13 +191,15 @@ class Client(process):
     def run():
         for i in range(nops):
             self.clock += 1
-            # sending the message from client to all replicas
+            # logging and sending the message from client to all replicas
             logger.info("{0} {{\"{0}\":{1}}} Sending request to all replicas.".format(self, self.clock))
             send(('request', (self, cid, random.randint(0, NOPS-1)), self.clock),
                  to= replicas)
+            # awaits the decision from all replicas
             await(cid in results)
             output('received result', cid, results[cid])
             cid += 1
+        # checks whether client has recieved decision from replicas for all operations
         await(each(cid in range(nops), has= count[cid] == len(replicas)))
         output('terminating')
         send(('done',), to=parent())
