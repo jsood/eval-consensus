@@ -2,29 +2,35 @@ import sys
 import time
 import psutil
 
+""" Statistics Class: Sets up the implementation and Calculates and logs performance metrics.
 class Stat(process):
     def setup(algo, nacceptors, nreplicas, nleaders, nclients, nops, runs):
         pass
 
+    # gets the performance metrics before algorithm starts
     def start_stats():
         return(time.time(), psutil.cpu_times().user, psutil.virtual_memory().used)
 
+    # gets the performance metrics before algorithm ends
     def end_stats(start_time, start_time_c, start_memory):
         e_time = time.time() - start_time
         c_time = psutil.cpu_times().user - start_time_c
         c_memory = psutil.virtual_memory().used - start_memory
         return(str(runs) + ',' + str(e_time) + ',' + str(c_time) +','+ str(c_memory) + '\n')
 
+    # starts all the processors
     def start_module(acceptors, replicas, leaders, clients):
         start(acceptors)
         start(replicas | leaders)
         start(clients)
 
+    # logs statistics to file
     def write_to_file(stats):
         f = open("logfile.csv", "a")
         f.write(stats)
         f.close()
 
+    # sets up processes and calls internal methods
     def algorun(module):
         acceptors = new(module.Acceptor, (), num= nacceptors)
         replicas = new(module.Replica, num= nreplicas)
@@ -36,8 +42,11 @@ class Stat(process):
 
         start_module(acceptors, replicas, leaders, clients)
 
+        # waits for all the clients to be done
         await(each(c in clients, has=received(('done',), from_=c)))
         output('All clients done.')
+
+        # informs all the processes to end
         send(('done',), to= (acceptors|replicas|leaders))
 
         stats = end_stats(start_time, start_time_c, start_memory)
@@ -57,11 +66,13 @@ def main():
     nops = int(sys.argv[5]) if len(sys.argv) > 5 else 3
     repetitions = int(sys.argv[6]) if len(sys.argv) > 6 else 4
 
+    # initial heading to the logfile added
     f = open("logfile.csv", "w")
     f.write('runs,elapsed_time,cpu_time,cpu_memory \n')
     f.close()
     n = repetitions
 
+    # setting up and starting stats process for n repetitions
     while n>0:
         stat_proc = new(Stat, ('orig', nacceptors, nreplicas, nleaders, nclients, nops, 5-n), num= 1)
         start(stat_proc)
