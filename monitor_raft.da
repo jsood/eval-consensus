@@ -1,0 +1,89 @@
+import sys
+import time
+import psutil
+ 
+# import raft
+
+# Statistics Class: Sets up the implementation and Calculates and logs performance metrics.
+class Stat(process):
+    def setup(algo, nservers, nclients, nrequests, maxtimeout, send_failrate, runs):
+        pass
+
+    # gets the performance metrics before algorithm starts
+    def start_stats():
+        return(time.time(), psutil.cpu_times().user, psutil.virtual_memory().used)
+
+    # gets the performance metrics before algorithm ends
+    def end_stats(start_time, start_time_c, start_memory):
+        e_time = time.time() - start_time
+        c_time = psutil.cpu_times().user - start_time_c
+        c_memory = psutil.virtual_memory().used - start_memory
+        return(str(runs) + ',' + str(e_time) + ',' + str(c_time) +','+ str(c_memory) + '\n')
+
+    # starts all the processors
+    def start_module(servers, clients):
+        start(servers)
+        start(clients)
+
+    # logs statistics to file
+    def write_to_file(stats):
+        f = open("logfile.csv", "a")
+        f.write(stats)
+        f.close()
+
+    # sets up processes and calls internal methods
+    def algorun(module):
+        # setup server and clients
+        servers = new(module.Server, num= nservers, send= send_failrate)
+        setup(servers, (servers, maxtimeout))
+        clients = new(module.Client, num= nclients)
+        setup(clients, (list(servers), nrequests, maxtimeout))
+
+        # capture start time statistics
+        start_time, start_time_c, start_memory = start_stats()
+
+        # start clients and server for raft
+        start_module(servers, clients)
+
+        # wait for clients to finish
+        await(each(c in clients, has=received(('Done',), from_=c)))
+        output("All clients done.")
+
+        # end the server processes
+        end(servers)
+
+        # collect end time statistics and write to log file
+        stats = end_stats(start_time, start_time_c, start_memory)
+        write_to_file(stats)
+
+        # inform parent process about termination
+        send(('done',), to= parent())
+
+    def run():
+        output('-------------------',algo,'run',runs, 'started---------------------')
+        module = import_da(algo)
+        # TODO: remove below line and uncomment above
+        # module = raft
+        algorun(module)
+
+def main():
+    nservers = int(sys.argv[1]) if len(sys.argv) > 1 else 5
+    nclients = int(sys.argv[2]) if len(sys.argv) > 2 else 3
+    nrequests = int(sys.argv[3]) if len(sys.argv) > 3 else 3
+    maxtimeout = int(sys.argv[4]) if len(sys.argv) > 4 else 3000
+    send_failrate = float(sys.argv[5]) if len(sys.argv) > 5 else 0.0
+    repetitions = int(sys.argv[6]) if len(sys.argv) > 6 else 4
+
+    # initial heading to the logfile added
+    f = open("logfile.csv", "w")
+    f.write('runs,elapsed_time,cpu_time,cpu_memory \n')
+    f.close()
+
+    # setting up and starting stats process for n repetitions
+    run = 1
+    while run <= repetitions:
+        stat_proc = new(Stat, ('raft', nservers, nclients, nrequests, maxtimeout, send_failrate, run), num= 1)
+        start(stat_proc)
+        await(each(p in stat_proc, has=received(('done',), from_=p)))
+        run += 1
+        output('done')

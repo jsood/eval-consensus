@@ -2,7 +2,7 @@ import sys
 import time
 import psutil
 
-""" Statistics Class: Sets up the implementation and Calculates and logs performance metrics.
+# Statistics Class: Sets up the implementation and Calculates and logs performance metrics.
 class Stat(process):
     def setup(algo, nacceptors, nreplicas, nleaders, nclients, nops, runs):
         pass
