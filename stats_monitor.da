@@ -1,6 +1,7 @@
 import sys
 import time
 import psutil
+#import orig
 
 # Statistics Class: Sets up the implementation and Calculates and logs performance metrics.
 class Stat(process):
@@ -9,14 +10,13 @@ class Stat(process):
 
     # gets the performance metrics before algorithm starts
     def start_stats():
-        return(time.time(), psutil.cpu_times().user, psutil.virtual_memory().used)
+        return(time.time(), psutil.cpu_times().user)
 
     # gets the performance metrics before algorithm ends
-    def end_stats(start_time, start_time_c, start_memory):
+    def end_stats(start_time, start_time_c):
         e_time = time.time() - start_time
         c_time = psutil.cpu_times().user - start_time_c
-        c_memory = psutil.virtual_memory().used - start_memory
-        return(str(runs) + ',' + str(e_time) + ',' + str(c_time) +','+ str(c_memory) + '\n')
+        return(str(runs) + ',' + str(e_time) + ',' + str(c_time))
 
     # starts all the processors
     def start_module(acceptors, replicas, leaders, clients):
@@ -30,6 +30,23 @@ class Stat(process):
         f.write(stats)
         f.close()
 
+    # collect all the memory consumption statistics received from clients and servers
+    def collect_memory_stats():
+        # create a set of (p, m) values
+        procmem = setof((p,m), received(('memory', p, m)))
+        procs = setof(p, received(('memory', p, _)))
+        total_memory_consumed = 0
+        for p in list(procs):
+            memset = setof(m, received(('memory', _p, m)))
+            mem = 0
+            for m in memset:
+                mem += m
+            # find the average memory consumed by thr process
+            avg_mem = mem/len(memset)
+            # add to the total memory consumed by current run
+            total_memory_consumed += avg_mem
+        return (','+ str(total_memory_consumed) + '\n')
+
     # sets up processes and calls internal methods
     def algorun(module):
         acceptors = new(module.Acceptor, (), num= nacceptors)
@@ -38,7 +55,7 @@ class Stat(process):
         initial_state = [];  setup(replicas, (leaders, initial_state))
         clients = new(module.Client, (replicas, nops), num= nclients)
 
-        start_time, start_time_c, start_memory = start_stats()
+        start_time, start_time_c = start_stats()
 
         start_module(acceptors, replicas, leaders, clients)
 
@@ -49,13 +66,19 @@ class Stat(process):
         # informs all the processes to end
         send(('done',), to= (acceptors|replicas|leaders))
 
-        stats = end_stats(start_time, start_time_c, start_memory)
+        # collect end time statistics and write to log file
+        stats = end_stats(start_time, start_time_c)
+
+        # Collect the total memory consumed by clients and servers
+        stats += collect_memory_stats()
         write_to_file(stats)
+
         send(('done',), to= parent())
 
     def run():
         output('-------------------',algo,': run',runs,' started---------------------')
         module = import_da(algo)
+        #module = orig
         algorun(module)
 
 def main():

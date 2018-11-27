@@ -1,7 +1,7 @@
 import sys
 import time
 import psutil
-import raft
+#import raft
 
 # File to log performance statistics for raft distalgo implementation
 logfile = "raft_da_perf.csv"
@@ -82,9 +82,8 @@ class Stat(process):
 
     def run():
         output('-------------------',algo,': run',runs, 'started---------------------')
-        #module = import_da(algo)
-        # TODO: remove below line and uncomment above
-        module = raft
+        module = import_da(algo)
+        #module = raft
         algorun(module)
 
 def main():
