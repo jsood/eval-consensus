@@ -1,5 +1,7 @@
 import sys
 import random
+import psutil
+import os
 
 # Enums for roles:
 class Role: pass
@@ -37,6 +39,10 @@ class Server(process):
         self._dispatch_table = {Follower  : self.follower_term,
                                 Candidate : self.candidate_term,
                                 Leader    : self.leader_term}
+        self.proc = psutil.Process(os.getpid())
+
+    def record_memory_consumed():
+        send(('memory', self, proc.memory_info()[1]/1000), to= parent())
 
     def run():
         while True:
@@ -57,6 +63,7 @@ class Server(process):
         elif timeout(termTimeout):
             output("Heartbeat timeout, transitioning to Candidate state.")
             currentRole = Candidate
+        record_memory_consumed()
 
     def candidate_term(termTimeout):
         --start_election
@@ -81,6 +88,7 @@ class Server(process):
             currentRole = Follower
         elif timeout(termTimeout):
             output("Election term", currentTerm, "timeout, restarting.")
+        record_memory_consumed()
 
     def leader_term(termTimeout):
         for server, index in nextIndex.items():
@@ -106,6 +114,7 @@ class Server(process):
         elif timeout(termTimeout/2):
             debug("Idle timeout triggered.")
             has_idled = True
+        record_memory_consumed()
 
     def receive(msg= ('RequestVote', term, candidateId,
                       lastLogIndex, lastLogTerm)):
@@ -193,6 +202,7 @@ class Server(process):
         # We need this additional information to pair the reply with the
         # original RPC request
         send(('AppendEntriesReply', term, success, updatedIndex), to=target)
+        record_memory_consumed()
 
     def RequestVoteRPC(target, term, candidateId, lastLogIndex, lastLogTerm):
         send(('RequestVote', term, candidateId, lastLogIndex, lastLogTerm),
@@ -202,7 +212,11 @@ class Server(process):
         send(('RequestVoteReply', term, voteGranted), to=target)
 
 class Client(process):
-    def setup(servers, nrequests, timeout): pass
+    def setup(servers, nrequests, timeout):
+        self.proc = psutil.Process(os.getpid())
+
+    def record_memory_consumed():
+        send(('memory', self, proc.memory_info()[1]/1000), to= parent())
 
     def run():
         target = random.choice(servers)
@@ -220,6 +234,7 @@ class Client(process):
             elif timeout(timeout/1000):
                 debug("Server", target, "timed out, choosing new one randomly.")
                 target = random.choice(servers)
+            record_memory_consumed()
 
         send(('Done',), to=parent())
 

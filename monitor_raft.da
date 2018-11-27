@@ -1,8 +1,10 @@
 import sys
 import time
 import psutil
- 
-# import raft
+import raft
+
+# File to log performance statistics for raft distalgo implementation
+logfile = "raft_da_perf.csv"
 
 # Statistics Class: Sets up the implementation and Calculates and logs performance metrics.
 class Stat(process):
@@ -11,14 +13,13 @@ class Stat(process):
 
     # gets the performance metrics before algorithm starts
     def start_stats():
-        return(time.time(), psutil.cpu_times().user, psutil.virtual_memory().used)
+        return(time.time(), psutil.cpu_times().user)
 
     # gets the performance metrics before algorithm ends
-    def end_stats(start_time, start_time_c, start_memory):
+    def end_stats(start_time, start_time_c):
         e_time = time.time() - start_time
         c_time = psutil.cpu_times().user - start_time_c
-        c_memory = psutil.virtual_memory().used - start_memory
-        return(str(runs) + ',' + str(e_time) + ',' + str(c_time) +','+ str(c_memory) + '\n')
+        return(str(runs) + ',' + str(e_time) + ',' + str(c_time))
 
     # starts all the processors
     def start_module(servers, clients):
@@ -27,9 +28,26 @@ class Stat(process):
 
     # logs statistics to file
     def write_to_file(stats):
-        f = open("logfile.csv", "a")
+        f = open(logfile, "a")
         f.write(stats)
         f.close()
+
+    # collect all the memory consumption statistics received from clients and servers
+    def collect_memory_stats():
+    	# create a set of (p, m) values
+    	procmem = setof((p,m), received(('memory', p, m)))
+    	procs = setof(p, received(('memory', p, _)))
+    	total_memory_consumed = 0
+    	for p in list(procs):
+    		memset = setof(m, received(('memory', _p, m)))
+    		mem = 0
+    		for m in memset:
+    			mem += m
+    		# find the average memory consumed by thr process
+    		avg_mem = mem/len(memset)
+    		# add to the total memory consumed by current run
+    		total_memory_consumed += avg_mem
+    	return (','+ str(total_memory_consumed) + '\n')
 
     # sets up processes and calls internal methods
     def algorun(module):
@@ -40,7 +58,7 @@ class Stat(process):
         setup(clients, (list(servers), nrequests, maxtimeout))
 
         # capture start time statistics
-        start_time, start_time_c, start_memory = start_stats()
+        start_time, start_time_c = start_stats()
 
         # start clients and server for raft
         start_module(servers, clients)
@@ -53,17 +71,20 @@ class Stat(process):
         end(servers)
 
         # collect end time statistics and write to log file
-        stats = end_stats(start_time, start_time_c, start_memory)
+        stats = end_stats(start_time, start_time_c)
+
+        # Collect the total memory consumed by clients and servers
+        stats += collect_memory_stats()
         write_to_file(stats)
 
         # inform parent process about termination
         send(('done',), to= parent())
 
     def run():
-        output('-------------------',algo,'run',runs, 'started---------------------')
-        module = import_da(algo)
+        output('-------------------',algo,': run',runs, 'started---------------------')
+        #module = import_da(algo)
         # TODO: remove below line and uncomment above
-        # module = raft
+        module = raft
         algorun(module)
 
 def main():
@@ -75,8 +96,8 @@ def main():
     repetitions = int(sys.argv[6]) if len(sys.argv) > 6 else 4
 
     # initial heading to the logfile added
-    f = open("logfile.csv", "w")
-    f.write('runs,elapsed_time,cpu_time,cpu_memory \n')
+    f = open(logfile, "w")
+    f.write('runs,elapsed_time,cpu_time,cpu_memory(kB)\n')
     f.close()
 
     # setting up and starting stats process for n repetitions

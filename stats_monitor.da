@@ -54,7 +54,7 @@ class Stat(process):
         send(('done',), to= parent())
 
     def run():
-        output('-------------------',algo,' started---------------------')
+        output('-------------------',algo,': run',runs,' started---------------------')
         module = import_da(algo)
         algorun(module)
 
