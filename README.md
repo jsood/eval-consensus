@@ -8,7 +8,7 @@ vrPaxos Driver: (https://github.com/unicomputing/eval-consensus-py/blob/master/s
 
 2. Changes in consensus algorithms Implementations: We have used the DistAlgo implementation of vrPaxos (https://github.com/unicomputing/eval-consensus-py/blob/master/orig.da) and raft (https://github.com/unicomputing/eval-consensus-py/blob/master/raft.da). We have modified these files to capture the memory consumption data, which is captured by the psutil library in python. We are sending these data to the drivers, and calculating the average memory consumption details there.
 
-3. Central Monitor: To operate and control all the drivers simultaneously, we have a monitor program(Github link: https://github.com/unicomputing/eval-consensus-py/blob/master/driver.da). The monitor is responsible to run the drivers, get the performance metrics out of them, and put them into performance visualization charts. Invoke ntuitive monitor interface inside eval-consensus-py directory from command line on a system having python and distalgo installed as: \textit{python -m da driver.da} 
+3. Central Monitor: To operate and control all the drivers simultaneously, we have a monitor program(Github link: https://github.com/unicomputing/eval-consensus-py/blob/master/driver.da). The monitor is responsible to run the drivers, get the performance metrics out of them, and put them into performance visualization charts. Invoke ntuitive monitor interface inside eval-consensus-py directory from command line on a system having python and distalgo installed as: python -m da driver.da
 
 4. Central Logger: We have create a central logger system (GitHub link: https://github.com/unicomputing/eval-consensus-py/blob/master/logger.py) to record and dump the performance logs externally.
 
