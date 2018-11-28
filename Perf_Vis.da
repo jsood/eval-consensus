@@ -27,4 +27,4 @@ ax.set_title('Elapsed Time per run')
 ax.legend()
 
 fig.tight_layout()
-fig.savefig("foo.pdf", bbox_inches='tight')
+fig.savefig("perf_vis.pdf", bbox_inches='tight')
