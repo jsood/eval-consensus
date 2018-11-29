@@ -1,0 +1,46 @@
+<Acceptor:e5002> {"<Acceptor:e5002>":1} <Acceptor:e5002> Initialization complete
+<Acceptor:e5003> {"<Acceptor:e5003>":1} <Acceptor:e5003> Initialization complete
+<Acceptor:e5004> {"<Acceptor:e5004>":1} <Acceptor:e5004> Initialization complete
+<Leader:e5007> {"<Leader:e5007>":1} <Leader:e5007> Initialization complete
+<Replica:e5005> {"<Replica:e5005>":1} <Replica:e5005> Initialization complete
+<Replica:e5006> {"<Replica:e5006>":1} <Replica:e5006> Initialization complete
+<Client:e5008> {"<Client:e5008>":1} <Client:e5008> Initialization complete
+<Leader:e5007> {"<Leader:e5007>":2} <Leader:e5007> Initializing Scout
+<Client:e5008> {"<Client:e5008>":2} <Client:e5008> Sending request 0 to all replicas.
+<Replica:e5006> {"<Replica:e5006>":2, "<Client:e5008>":2} <Replica:e5006> Received request from client <Client:e5008>
+<Replica:e5006> {"<Replica:e5006>":3} <Replica:e5006> sending proposal to leaders
+<Replica:e5005> {"<Replica:e5005>":2, "<Client:e5008>":2} <Replica:e5005> Received request from client <Client:e5008>
+<Replica:e5005> {"<Replica:e5005>":3} <Replica:e5005> sending proposal to leaders
+<Scout:c2001> {"<Scout:c2001>":1, "<Leader:e5007>":2} <Scout:c2001> Initiated by leader <Leader:e5007>
+<Leader:e5007> {"<Leader:e5007>":3, "<Replica:e5005>":3} <Leader:e5007> Received propose request from replica <Replica:e5005>
+<Leader:e5007> {"<Leader:e5007>":4, "<Replica:e5006>":3} <Leader:e5007> Received propose request from replica <Replica:e5006>
+<Scout:c2001> {"<Scout:c2001>":2} <Scout:c2001> Sending P1A message to acceptors
+<Acceptor:e5004> {"<Acceptor:e5004>":2, "<Scout:c2001>":2} <Acceptor:e5004> Received P1A message from scout <Scout:c2001>
+<Acceptor:e5004> {"<Acceptor:e5004>":3} <Acceptor:e5004> Sending P1B message to scout <Scout:c2001>
+<Acceptor:e5002> {"<Acceptor:e5002>":2, "<Scout:c2001>":2} <Acceptor:e5002> Received P1A message from scout <Scout:c2001>
+<Acceptor:e5002> {"<Acceptor:e5002>":3} <Acceptor:e5002> Sending P1B message to scout <Scout:c2001>
+<Acceptor:e5003> {"<Acceptor:e5003>":2, "<Scout:c2001>":2} <Acceptor:e5003> Received P1A message from scout <Scout:c2001>
+<Acceptor:e5003> {"<Acceptor:e5003>":3} <Acceptor:e5003> Sending P1B message to scout <Scout:c2001>
+<Scout:c2001> {"<Scout:c2001>":3, "<Acceptor:e5004>":3} <Scout:c2001> Received P1B message from acceptor <Acceptor:e5004>
+<Scout:c2001> {"<Scout:c2001>":4, "<Acceptor:e5002>":3} <Scout:c2001> Received P1B message from acceptor <Acceptor:e5002>
+<Scout:c2001> {"<Scout:c2001>":5} <Scout:c2001> Sending adopted message to leader <Leader:e5007>
+<Leader:e5007> {"<Leader:e5007>":5, "<Scout:c2001>":5} <Leader:e5007> Received adopted message from scout <Scout:c2001>
+<Leader:e5007> {"<Leader:e5007>":6} <Leader:e5007> Initializing Commander
+<Commander:c2002> {"<Commander:c2002>":1, "<Leader:e5007>":6} <Commander:c2002> Initiated by leader <Leader:e5007>
+<Commander:c2002> {"<Commander:c2002>":2} <Commander:c2002> Sending P2A message to acceptors
+<Acceptor:e5004> {"<Acceptor:e5004>":4, "<Commander:c2002>":2} <Acceptor:e5004> Received P2A message from commander <Commander:c2002>
+<Acceptor:e5004> {"<Acceptor:e5004>":5} <Acceptor:e5004> Sending P2B message to commander <Commander:c2002>
+<Acceptor:e5002> {"<Acceptor:e5002>":4, "<Commander:c2002>":2} <Acceptor:e5002> Received P2A message from commander <Commander:c2002>
+<Acceptor:e5002> {"<Acceptor:e5002>":5} <Acceptor:e5002> Sending P2B message to commander <Commander:c2002>
+mander <Commander:c2002>
+<Acceptor:e5003> {"<Acceptor:e5003>":4, "<Commander:c2002>":2} <Acceptor:e5003> Received P2A message from commander <Commander:c2002>
+<Acceptor:e5003> {"<Acceptor:e5003>":5} <Acceptor:e5003> Sending P2B message to commander <Commander:c2002>
+<Commander:c2002> {"<Commander:c2002>":3, "<Acceptor:e5004>":5} <Commander:c2002> Received P2B message from acceptor <Acceptor:e5004>
+<Commander:c2002> {"<Commander:c2002>":4, "<Acceptor:e5002>":5} <Commander:c2002> Received P2B message from acceptor <Acceptor:e5002>
+<Commander:c2002> {"<Commander:c2002>":5} <Commander:c2002> Sending decision to replicas
+<Replica:e5005> {"<Replica:e5005>":4, "<Commander:c2002>":5} <Replica:e5005> Received decision from commander <Commander:c2002>
+<Replica:e5006> {"<Replica:e5006>":4, "<Commander:c2002>":5} <Replica:e5006> Received decision from commander <Commander:c2002>
+<Replica:e5005> {"<Replica:e5005>":5} <Replica:e5005> sending decision to <Client:e5008>
+<Replica:e5006> {"<Replica:e5006>":5} <Replica:e5006> sending decision to <Client:e5008>
+<Client:e5008> {"<Client:e5008>":3, "<Replica:e5005>":5} <Client:e5008> Received response from replica <Replica:e5005>
+<Client:e5008> {"<Client:e5008>":4, "<Replica:e5006>":5} <Client:e5008> Received response from replica <Replica:e5006>

@@ -13,3 +13,13 @@ vrPaxos Driver: (https://github.com/unicomputing/eval-consensus-py/blob/master/s
 4. Central Logger: We have create a central logger system (GitHub link: https://github.com/unicomputing/eval-consensus-py/blob/master/logger.py) to record and dump the performance logs externally.
 
 5. Visualizations: As of now, we have created a file to externally read the log files and generate the graphs using the matplotlib library in python. The code for Chart generator is given in Github link: https://github.com/unicomputing/eval-consensus-py/blob/master/Perf_Vis.da. We are planning to execute this from monitor program to reduce the extra number of files. A sample set of charts can be found at: https://github.com/unicomputing/eval-consensus-py/blob/master/perf_vis.pdf.
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+command used to generate vrpaxos shiviz logs: 
+python -m da orig.da 3 2 1 1 1
+
+copy-paste contents of vrpaxos.log into shiviz tool. Use following as log parsing regular expression:
+```
+(?<host>\S*) (?<clock>{.*})\ (?<event>.*)
+```
