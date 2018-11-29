@@ -1,7 +1,8 @@
 List of pending things (TODOs)
 
-1. Throughput using number of client requests - Time taken to process a request. 
-	Just plots of requests vs time taken is enough. No need to calculate separately.
+1. 	(a) Throughput using number of client requests - Time taken to process a request. 
+	Just plot of time taken vs no. of requests is enough. No need to calculate separately.
+	(b) Plot of time taken to reach consensus vs number of processes
 2. For now manually delete vrpaxos.log file before each run. Need to find out how logger can create a new file/truncate the file at starting of each run.
 3. basic shiviz visualization for raft.da
 4. fix missing one or two lines in shiviz log files. This will also fix 2.
