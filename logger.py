@@ -1,6 +1,6 @@
 import logging
-#import logging.handlers
-#import os
+import logging.handlers
+import os
 
 # create logger
 logger = logging.getLogger('vrpaxos')
@@ -11,7 +11,10 @@ ch = logging.StreamHandler()
 ch.setLevel(logging.INFO)
 
 filename = "vrpaxos.log"
-#should_roll_over = os.path.isfile(filename)
+should_roll_over = os.path.isfile(filename)
+handler = logging.handlers.RotatingFileHandler(filename, mode='w')
+if should_roll_over:  # log already exists, roll over!
+    handler.doRollover()
 
 #file handler
 fh = logging.FileHandler(filename)
