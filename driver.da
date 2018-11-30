@@ -2,15 +2,34 @@ import os
 
 def da_paxos():
     print("RUNNING DA PAXOS")
-    params = input("ENTER VALUES FOR COUNT OF: {acceptors} {replicas} {leaders} {clients} {operations} {runs}\nPress Enter to skip")
+    #params = input("ENTER VALUES FOR COUNT OF: {acceptors} {replicas} {leaders} {clients} {operations} {runs}\nPress Enter to skip")
+    #params = input("ENTER VALUES FOR COUNT OF ACCEPTORS\nPress Enter to skip")
+    #if int(params) == 3:
+    #  params =  "3 2 1 1 3 8"
+    #elif int(params) == 5:
+    #  params = ""
+    #else:
+    #  print("WRONG VALUE")
     module = import_da("stats_monitor")
+    os.system('python -m da -m stats_monitor ')
+    params =  "3 2 1 1 3 8"
     os.system('python -m da -m stats_monitor '+ params)
 
 def python_paxos():
     print("RUNNING PYTHON PAXOS")
 
 def da_raft():
-    print("RUNNING DA RAFT")
+    print("RUNNING DA PAXOS")
+    #params = input("ENTER VALUES FOR COUNT OF: {servers} {clients} {requests} {maxtimeout} {send_failrate} {runs}\nPress Enter to skip")
+    #params = input("ENTER VALUES FOR COUNT OF SERVERS\nPress Enter to skip")
+    #if int(params) == 3:
+    #  params =  "3 1 3 3000 0.0 4"
+    #elif int(params) == 5:
+    #  params = ""
+    module = import_da("monitor_raft")
+    os.system('python -m da -m monitor_raft ')
+    params =  "3 1 3 3000 0.0 4"
+    os.system('python -m da -m monitor_raft '+ params)
 
 def python_raft():
     print("RUNNING PYTHON RAFT")

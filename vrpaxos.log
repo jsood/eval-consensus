@@ -1,6 +1,89 @@
-<Replica:28005> {"<Replica:28005>":1} Initialization complete
-<Replica:28006> {"<Replica:28006>":1} Initialization complete
-<Client:28008> {"<Client:28008>":1} Initialization complete
-<Client:28008> {"<Client:28008>":2} Sending request to all replicas.
-<Replica:28006> {"<Replica:28006>":2, "<Client:28008>":2} Received request from client
-<Replica:28005> {"<Replica:28005>":2, "<Client:28008>":2} Received request from client
+<Client:bc007> {"<Client:bc007>":1} <Client:bc007> Initialization complete
+<Leader:bc006> {"<Leader:bc006>":2} <Leader:bc006> Initializing Scout
+<Client:bc007> {"<Client:bc007>":2} <Client:bc007> Sending request 0 to all replicas.
+<Replica:bc004> {"<Replica:bc004>":2, "<Client:bc007>":2} <Replica:bc004> Received request from client <Client:bc007>
+<Replica:bc004> {"<Replica:bc004>":3} <Replica:bc004> sending proposal to leaders
+<Replica:bc005> {"<Replica:bc005>":2, "<Client:bc007>":2} <Replica:bc005> Received request from client <Client:bc007>
+<Replica:bc005> {"<Replica:bc005>":3} <Replica:bc005> sending proposal to leaders
+<Scout:e6001> {"<Scout:e6001>":1, "<Leader:bc006>":2} <Scout:e6001> Initiated by leader <Leader:bc006>
+<Leader:bc006> {"<Leader:bc006>":3, "<Replica:bc004>":3} <Leader:bc006> Received propose request from replica <Replica:bc004>
+<Leader:bc006> {"<Leader:bc006>":4, "<Replica:bc005>":3} <Leader:bc006> Received propose request from replica <Replica:bc005>
+<Scout:e6001> {"<Scout:e6001>":2} <Scout:e6001> Sending P1A message to acceptors
+<Acceptor:bc003> {"<Acceptor:bc003>":2, "<Scout:e6001>":2} <Acceptor:bc003> Received P1A message from scout <Scout:e6001>
+<Acceptor:bc003> {"<Acceptor:bc003>":3} <Acceptor:bc003> Sending P1B message to scout <Scout:e6001>
+<Acceptor:bc001> {"<Acceptor:bc001>":2, "<Scout:e6001>":2} <Acceptor:bc001> Received P1A message from scout <Scout:e6001>
+<Acceptor:bc001> {"<Acceptor:bc001>":3} <Acceptor:bc001> Sending P1B message to scout <Scout:e6001>
+<Acceptor:bc002> {"<Acceptor:bc002>":2, "<Scout:e6001>":2} <Acceptor:bc002> Received P1A message from scout <Scout:e6001>
+<Acceptor:bc002> {"<Acceptor:bc002>":3} <Acceptor:bc002> Sending P1B message to scout <Scout:e6001>
+<Scout:e6001> {"<Scout:e6001>":3, "<Acceptor:bc003>":3} <Scout:e6001> Received P1B message from acceptor <Acceptor:bc003>
+<Scout:e6001> {"<Scout:e6001>":4, "<Acceptor:bc001>":3} <Scout:e6001> Received P1B message from acceptor <Acceptor:bc001>
+<Scout:e6001> {"<Scout:e6001>":5} <Scout:e6001> Sending adopted message to leader <Leader:bc006>
+<Leader:bc006> {"<Leader:bc006>":5, "<Scout:e6001>":5} <Leader:bc006> Received adopted message from scout <Scout:e6001>
+<Leader:bc006> {"<Leader:bc006>":6} <Leader:bc006> Initializing Commander
+<Commander:e6002> {"<Commander:e6002>":1, "<Leader:bc006>":6} <Commander:e6002> Initiated by leader <Leader:bc006>
+<Commander:e6002> {"<Commander:e6002>":2} <Commander:e6002> Sending P2A message to acceptors
+<Acceptor:bc003> {"<Acceptor:bc003>":4, "<Commander:e6002>":2} <Acceptor:bc003> Received P2A message from commander <Commander:e6002>
+<Acceptor:bc003> {"<Acceptor:bc003>":5} <Acceptor:bc003> Sending P2B message to commander <Commander:e6002>
+<Acceptor:bc001> {"<Acceptor:bc001>":4, "<Commander:e6002>":2} <Acceptor:bc001> Received P2A message from commander <Commander:e6002>
+<Acceptor:bc001> {"<Acceptor:bc001>":5} <Acceptor:bc001> Sending P2B message to commander <Commander:e6002>
+<Acceptor:bc002> {"<Acceptor:bc002>":4, "<Commander:e6002>":2} <Acceptor:bc002> Received P2A message from commander <Commander:e6002>
+<Acceptor:bc002> {"<Acceptor:bc002>":5} <Acceptor:bc002> Sending P2B message to commander <Commander:e6002>
+<Commander:e6002> {"<Commander:e6002>":3, "<Acceptor:bc003>":5} <Commander:e6002> Received P2B message from acceptor <Acceptor:bc003>
+<Commander:e6002> {"<Commander:e6002>":4, "<Acceptor:bc001>":5} <Commander:e6002> Received P2B message from acceptor <Acceptor:bc001>
+<Commander:e6002> {"<Commander:e6002>":5} <Commander:e6002> Sending decision to replicas
+<Replica:bc004> {"<Replica:bc004>":4, "<Commander:e6002>":5} <Replica:bc004> Received decision from commander <Commander:e6002>
+<Replica:bc004> {"<Replica:bc004>":5} <Replica:bc004> sending decision to <Client:bc007>
+<Replica:bc005> {"<Replica:bc005>":4, "<Commander:e6002>":5} <Replica:bc005> Received decision from commander <Commander:e6002>
+<Replica:bc005> {"<Replica:bc005>":5} <Replica:bc005> sending decision to <Client:bc007>
+<Client:bc007> {"<Client:bc007>":3, "<Replica:bc004>":5} <Client:bc007> Received response from replica <Replica:bc004>
+<Client:bc007> {"<Client:bc007>":4} <Client:bc007> Sending request 1 to all replicas.
+<Client:bc007> {"<Client:bc007>":5, "<Replica:bc005>":5} <Client:bc007> Received response from replica <Replica:bc005>
+<Replica:bc004> {"<Replica:bc004>":6, "<Client:bc007>":4} <Replica:bc004> Received request from client <Client:bc007>
+<Replica:bc004> {"<Replica:bc004>":7} <Replica:bc004> sending proposal to leaders
+<Replica:bc005> {"<Replica:bc005>":6, "<Client:bc007>":4} <Replica:bc005> Received request from client <Client:bc007>
+<Replica:bc005> {"<Replica:bc005>":7} <Replica:bc005> sending proposal to leaders
+<Leader:bc006> {"<Leader:bc006>":7, "<Replica:bc004>":7} <Leader:bc006> Received propose request from replica <Replica:bc004>
+<Leader:bc006> {"<Leader:bc006>":8} <Leader:bc006> Initializing Commander
+<Commander:e6003> {"<Commander:e6003>":1, "<Leader:bc006>":8} <Commander:e6003> Initiated by leader <Leader:bc006>
+<Commander:e6003> {"<Commander:e6003>":2} <Commander:e6003> Sending P2A message to acceptors
+<Leader:bc006> {"<Leader:bc006>":9, "<Replica:bc005>":7} <Leader:bc006> Received propose request from replica <Replica:bc005>
+<Acceptor:bc003> {"<Acceptor:bc003>":6, "<Commander:e6003>":2} <Acceptor:bc003> Received P2A message from commander <Commander:e6003>
+<Acceptor:bc003> {"<Acceptor:bc003>":7} <Acceptor:bc003> Sending P2B message to commander <Commander:e6003>
+<Acceptor:bc001> {"<Acceptor:bc001>":6, "<Commander:e6003>":2} <Acceptor:bc001> Received P2A message from commander <Commander:e6003>
+<Acceptor:bc001> {"<Acceptor:bc001>":7} <Acceptor:bc001> Sending P2B message to commander <Commander:e6003>
+<Commander:e6003> {"<Commander:e6003>":3, "<Acceptor:bc003>":7} <Commander:e6003> Received P2B message from acceptor <Acceptor:bc003>
+<Acceptor:bc002> {"<Acceptor:bc002>":6, "<Commander:e6003>":2} <Acceptor:bc002> Received P2A message from commander <Commander:e6003>
+<Acceptor:bc002> {"<Acceptor:bc002>":7} <Acceptor:bc002> Sending P2B message to commander <Commander:e6003>
+<Commander:e6003> {"<Commander:e6003>":4, "<Acceptor:bc001>":7} <Commander:e6003> Received P2B message from acceptor <Acceptor:bc001>
+<Commander:e6003> {"<Commander:e6003>":5} <Commander:e6003> Sending decision to replicas
+<Replica:bc004> {"<Replica:bc004>":8, "<Commander:e6003>":5} <Replica:bc004> Received decision from commander <Commander:e6003>
+<Replica:bc004> {"<Replica:bc004>":9} <Replica:bc004> sending decision to <Client:bc007>
+<Replica:bc005> {"<Replica:bc005>":8, "<Commander:e6003>":5} <Replica:bc005> Received decision from commander <Commander:e6003>
+<Replica:bc005> {"<Replica:bc005>":9} <Replica:bc005> sending decision to <Client:bc007>
+<Client:bc007> {"<Client:bc007>":6, "<Replica:bc004>":9} <Client:bc007> Received response from replica <Replica:bc004>
+<Client:bc007> {"<Client:bc007>":7} <Client:bc007> Sending request 2 to all replicas.
+<Client:bc007> {"<Client:bc007>":8, "<Replica:bc005>":9} <Client:bc007> Received response from replica <Replica:bc005>
+<Replica:bc004> {"<Replica:bc004>":10, "<Client:bc007>":7} <Replica:bc004> Received request from client <Client:bc007>
+<Replica:bc004> {"<Replica:bc004>":11} <Replica:bc004> sending proposal to leaders
+<Replica:bc005> {"<Replica:bc005>":10, "<Client:bc007>":7} <Replica:bc005> Received request from client <Client:bc007>
+<Replica:bc005> {"<Replica:bc005>":11} <Replica:bc005> sending proposal to leaders
+<Leader:bc006> {"<Leader:bc006>":10, "<Replica:bc004>":11} <Leader:bc006> Received propose request from replica <Replica:bc004>
+<Leader:bc006> {"<Leader:bc006>":11} <Leader:bc006> Initializing Commander
+<Commander:e6004> {"<Commander:e6004>":1, "<Leader:bc006>":11} <Commander:e6004> Initiated by leader <Leader:bc006>
+<Commander:e6004> {"<Commander:e6004>":2} <Commander:e6004> Sending P2A message to acceptors
+<Leader:bc006> {"<Leader:bc006>":12, "<Replica:bc005>":11} <Leader:bc006> Received propose request from replica <Replica:bc005>
+<Acceptor:bc003> {"<Acceptor:bc003>":8, "<Commander:e6004>":2} <Acceptor:bc003> Received P2A message from commander <Commander:e6004>
+<Acceptor:bc003> {"<Acceptor:bc003>":9} <Acceptor:bc003> Sending P2B message to commander <Commander:e6004>
+<Acceptor:bc001> {"<Acceptor:bc001>":8, "<Commander:e6004>":2} <Acceptor:bc001> Received P2A message from commander <Commander:e6004>
+<Acceptor:bc001> {"<Acceptor:bc001>":9} <Acceptor:bc001> Sending P2B message to commander <Commander:e6004>
+<Acceptor:bc002> {"<Acceptor:bc002>":8, "<Commander:e6004>":2} <Acceptor:bc002> Received P2A message from commander <Commander:e6004>
+<Acceptor:bc002> {"<Acceptor:bc002>":9} <Acceptor:bc002> Sending P2B message to commander <Commander:e6004>
+<Commander:e6004> {"<Commander:e6004>":3, "<Acceptor:bc003>":9} <Commander:e6004> Received P2B message from acceptor <Acceptor:bc003>
+<Commander:e6004> {"<Commander:e6004>":4, "<Acceptor:bc001>":9} <Commander:e6004> Received P2B message from acceptor <Acceptor:bc001>
+<Commander:e6004> {"<Commander:e6004>":5} <Commander:e6004> Sending decision to replicas
+<Replica:bc004> {"<Replica:bc004>":12, "<Commander:e6004>":5} <Replica:bc004> Received decision from commander <Commander:e6004>
+<Replica:bc004> {"<Replica:bc004>":13} <Replica:bc004> sending decision to <Client:bc007>
+<Replica:bc005> {"<Replica:bc005>":12, "<Commander:e6004>":5} <Replica:bc005> Received decision from commander <Commander:e6004>
+<Replica:bc005> {"<Replica:bc005>":13} <Replica:bc005> sending decision to <Client:bc007>
+<Client:bc007> {"<Client:bc007>":9, "<Replica:bc004>":13} <Client:bc007> Received response from replica <Replica:bc004>
+<Client:bc007> {"<Client:bc007>":10, "<Replica:bc005>":13} <Client:bc007> Received response from replica <Replica:bc005>

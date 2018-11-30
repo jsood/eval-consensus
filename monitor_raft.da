@@ -19,7 +19,7 @@ class Stat(process):
     def end_stats(start_time, start_time_c):
         e_time = time.time() - start_time
         c_time = psutil.cpu_times().user - start_time_c
-        return(str(runs) + ',' + str(e_time) + ',' + str(c_time))
+        return(str(nservers), + ',' +str(runs) + ',' + str(e_time) + ',' + str(c_time))
 
     # starts all the processors
     def start_module(servers, clients):
@@ -28,7 +28,7 @@ class Stat(process):
 
     # logs statistics to file
     def write_to_file(stats):
-        f = open(logfile, "a")
+        f = open("raftlogfile" + str(nservers) + ".csv", "a")
         f.write(stats)
         f.close()
 
@@ -95,8 +95,8 @@ def main():
     repetitions = int(sys.argv[6]) if len(sys.argv) > 6 else 4
 
     # initial heading to the logfile added
-    f = open(logfile, "w")
-    f.write('runs,elapsed_time,cpu_time,cpu_memory(kB)\n')
+    f = open("raftlogfile" + str(nservers) + ".csv", "w")
+    f.write('servers,runs,elapsed_time,cpu_time,cpu_memory(kB)\n')
     f.close()
 
     # setting up and starting stats process for n repetitions

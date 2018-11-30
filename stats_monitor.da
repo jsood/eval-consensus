@@ -16,7 +16,7 @@ class Stat(process):
     def end_stats(start_time, start_time_c):
         e_time = time.time() - start_time
         c_time = psutil.cpu_times().user - start_time_c
-        return(str(runs) + ',' + str(e_time) + ',' + str(c_time))
+        return(str(nacceptors)+ ',' + str(runs) + ',' + str(e_time) + ',' + str(c_time))
 
     # starts all the processors
     def start_module(acceptors, replicas, leaders, clients):
@@ -26,7 +26,7 @@ class Stat(process):
 
     # logs statistics to file
     def write_to_file(stats):
-        f = open("logfile.csv", "a")
+        f = open("paxoslogfile" + str(nacceptors) + ".csv", "a")
         f.write(stats)
         f.close()
 
@@ -78,7 +78,6 @@ class Stat(process):
     def run():
         output('-------------------',algo,': run',runs,' started---------------------')
         module = import_da(algo)
-        #module = orig
         algorun(module)
 
 def main():
@@ -87,17 +86,17 @@ def main():
     nleaders = int(sys.argv[3]) if len(sys.argv) > 3 else 2
     nclients = int(sys.argv[4]) if len(sys.argv) > 4 else 3
     nops = int(sys.argv[5]) if len(sys.argv) > 5 else 3
-    repetitions = int(sys.argv[6]) if len(sys.argv) > 6 else 4
+    repetitions = int(sys.argv[6]) if len(sys.argv) > 6 else 8
 
     # initial heading to the logfile added
-    f = open("logfile.csv", "w")
-    f.write('runs,elapsed_time,cpu_time,cpu_memory \n')
+    f = open("paxoslogfile" + str(nacceptors) + ".csv", "w")
+    f.write('servers,runs,elapsed_time,cpu_time,cpu_memory \n')
     f.close()
     n = repetitions
 
     # setting up and starting stats process for n repetitions
     while n>0:
-        stat_proc = new(Stat, ('orig', nacceptors, nreplicas, nleaders, nclients, nops, 5-n), num= 1)
+        stat_proc = new(Stat, ('orig', nacceptors, nreplicas, nleaders, nclients, nops, repetitions+1-n), num= 1)
         start(stat_proc)
         await(each(p in stat_proc, has=received(('done',), from_=p)))
         n=n-1
