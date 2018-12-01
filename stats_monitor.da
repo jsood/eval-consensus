@@ -16,7 +16,7 @@ class Stat(process):
     def end_stats(start_time, start_time_c):
         e_time = time.time() - start_time
         c_time = psutil.cpu_times().user - start_time_c
-        return(str(nacceptors)+ ',' + str(runs) + ',' + str(e_time) + ',' + str(c_time))
+        return('paxos,'+str(nacceptors)+ ',' + str(nops)+ ',' + str(runs) + ',' + str(e_time) + ',' + str(c_time))
 
     # starts all the processors
     def start_module(acceptors, replicas, leaders, clients):
@@ -26,7 +26,7 @@ class Stat(process):
 
     # logs statistics to file
     def write_to_file(stats):
-        f = open("paxoslogfile" + str(nacceptors) + ".csv", "a")
+        f = open("paxoslogfile.csv", "a")
         f.write(stats)
         f.close()
 
@@ -93,9 +93,10 @@ def main():
     repetitions = int(sys.argv[6]) if len(sys.argv) > 6 else 8
 
     # initial heading to the logfile added
-    f = open("paxoslogfile" + str(nacceptors) + ".csv", "w")
-    f.write('servers,runs,elapsed_time,cpu_time,cpu_memory \n')
-    f.close()
+    #if nops == 1:
+      f = open("paxoslogfile.csv", "w")
+      f.write('program,servers,operations,runs,elapsed_time,cpu_time,cpu_memory(kB)\n')
+      f.close()
     n = repetitions
 
     # setting up and starting stats process for n repetitions
