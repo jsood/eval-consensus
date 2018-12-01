@@ -49,6 +49,10 @@ class Stat(process):
 
     # sets up processes and calls internal methods
     def algorun(module):
+        #log to start shiviz: regex
+        logger.info("(?<host>\S*) (?<clock>{.*})\ (?<event>.*)")
+        logger.info('\n')
+        #need to add multiple execution delimiter as well
         acceptors = new(module.Acceptor, (), num= nacceptors)
         replicas = new(module.Replica, num= nreplicas)
         leaders = new(module.Leader, (acceptors, replicas), num= nleaders)
