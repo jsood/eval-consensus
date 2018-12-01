@@ -19,7 +19,7 @@ class Stat(process):
     def end_stats(start_time, start_time_c):
         e_time = time.time() - start_time
         c_time = psutil.cpu_times().user - start_time_c
-        return(str(nservers), + ',' +str(runs) + ',' + str(e_time) + ',' + str(c_time))
+        return('raft,'+str(nservers), + ',' + str(nrequests), + ',' + str(runs) + ',' + str(e_time) + ',' + str(c_time))
 
     # starts all the processors
     def start_module(servers, clients):
@@ -28,7 +28,7 @@ class Stat(process):
 
     # logs statistics to file
     def write_to_file(stats):
-        f = open("raftlogfile" + str(nservers) + ".csv", "a")
+        f = open("raftlogfile.csv", "a")
         f.write(stats)
         f.close()
 
@@ -92,12 +92,13 @@ def main():
     nrequests = int(sys.argv[3]) if len(sys.argv) > 3 else 3
     maxtimeout = int(sys.argv[4]) if len(sys.argv) > 4 else 3000
     send_failrate = float(sys.argv[5]) if len(sys.argv) > 5 else 0.0
-    repetitions = int(sys.argv[6]) if len(sys.argv) > 6 else 4
+    repetitions = int(sys.argv[6]) if len(sys.argv) > 6 else 8
 
     # initial heading to the logfile added
-    f = open("raftlogfile" + str(nservers) + ".csv", "w")
-    f.write('servers,runs,elapsed_time,cpu_time,cpu_memory(kB)\n')
-    f.close()
+    #if nrequests == 1:
+      f = open("raftlogfile.csv", "w")
+      f.write('program,servers,operations,runs,elapsed_time,cpu_time,cpu_memory(kB)\n')
+      f.close()
 
     # setting up and starting stats process for n repetitions
     run = 1
