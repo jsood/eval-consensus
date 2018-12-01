@@ -96,9 +96,9 @@ def main():
 
     # initial heading to the logfile added
     #if nrequests == 1:
-      f = open("raftlogfile.csv", "w")
-      f.write('program,servers,operations,runs,elapsed_time,cpu_time,cpu_memory(kB)\n')
-      f.close()
+    f = open("raftlogfile.csv", "w")
+    f.write('program,servers,operations,runs,elapsed_time,cpu_time,cpu_memory(kB)\n')
+    f.close()
 
     # setting up and starting stats process for n repetitions
     run = 1
