@@ -94,9 +94,9 @@ def main():
 
     # initial heading to the logfile added
     #if nops == 1:
-      f = open("paxoslogfile.csv", "w")
-      f.write('program,servers,operations,runs,elapsed_time,cpu_time,cpu_memory(kB)\n')
-      f.close()
+    f = open("paxoslogfile.csv", "w")
+    f.write('program,servers,operations,runs,elapsed_time,cpu_time,cpu_memory(kB)\n')
+    f.close()
     n = repetitions
 
     # setting up and starting stats process for n repetitions
