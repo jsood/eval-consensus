@@ -26,7 +26,6 @@ class Replica(process):
         # added code for logging
         self.logger_line = []
         self.clock = 1
-        #logger.info("{0} {{\"{0}\":{1}}} {0} Initialization complete".format(self, self.clock))
         logger_line.append("{0} {{\"{0}\":{1}}} {0} Initialization complete".format(self, self.clock))
 
     def record_memory_consumed():
@@ -41,7 +40,6 @@ class Replica(process):
                            not some((_s, _) in proposals | decisions)))
             proposals.add((s1, p))
             clock += 1
-            #logger.info("{0} {{\"{0}\":{1}}} {0} sending proposal to leaders".format(self, clock))
             logger_line.append("{0} {{\"{0}\":{1}}} {0} sending proposal to leaders".format(self, clock))
 
             send(('propose', s1, p, self, clock), to= leaders)
@@ -59,36 +57,31 @@ class Replica(process):
             state = next; slot_num += 1
             # send result back to client for a command
             clock += 1
-            #logger.info("{0} {{\"{0}\":{1}}} {0} sending decision to {2}".format(self, clock, client))
             logger_line.append("{0} {{\"{0}\":{1}}} {0} sending decision to {2}".format(self, clock, client))
 
-            send(('response', cid, result, self, clock), to= client)
-        record_memory_consumed()
-
-    def run():
-        debug('### start')
+            send(('response', cid, result, self,
         await(received(('done',)))
         logger_line = '\n'.join(logger_line)
         logger.info(logger_line)
         output('terminating')
 
-    # receive request from client
+    # receive request from client clock), to= client)
+        record_memory_consumed()
+
+    def run():
+        debug('### start')
     def receive(msg= ('request', p, clk)):
         debug('### request', p)
         clock += 1
         # logging received message info
-        #logger.info("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received request from client {2}".format(self, self.clock, p[0], clk))
         logger_line.append("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received request from client {2}".format(self, self.clock, p[0], clk))
-        #logger_line = '\n'.join(logger_line)
         propose(p)
 
     # receives decision from a commander
     def receive(msg= ('decision', s, p, cmdr, clk)):
         debug('### decision', s, p)
         clock += 1
-        #logger.info("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received decision from commander {2}".format(self, self.clock, cmdr, clk))
         logger_line.append("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received decision from commander {2}".format(self, self.clock, cmdr, clk))
-        #logger_line = '\n'.join(logger_line)
         decisions.add((s, p))
         while some((_slot_num, p1) in decisions):
             if some((_slot_num, p2) in proposals, has= p2 != p1):
@@ -103,9 +96,7 @@ class Acceptor(process):
         # added code for logging
         self.clock = 1
         self.logger_line = []
-        #logger.info("{0} {{\"{0}\":{1}}} {0} Initialization complete".format(self, self.clock))
         logger_line.append("{0} {{\"{0}\":{1}}} {0} Initialization complete".format(self, self.clock))
-        #logger_line = '\n'.join(logger_line)
 
     def record_memory_consumed():
         send(('memory', self, proc.memory_info()[1]/1000), to= parent())
@@ -127,13 +118,9 @@ class Acceptor(process):
     def receive(msg= ('p1a', leader_scout, b, clk)):
         debug('### p1a', leader_scout, b)
         clock += 1
-        #logger.info("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received P1A message from scout {2}".format(self, self.clock, leader_scout, clk))
         logger_line.append("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received P1A message from scout {2}".format(self, self.clock, leader_scout, clk))
-        #logger_line = '\n'.join(logger_line)
         clock += 1
-        #logger.info("{0} {{\"{0}\":{1}}} {0} Sending P1B message to scout {2}".format(self, self.clock, leader_scout))
         logger_line.append("{0} {{\"{0}\":{1}}} {0} Sending P1B message to scout {2}".format(self, self.clock, leader_scout))
-        #logger_line = '\n'.join(logger_line)
         send(('p1b', self, ballot_num, accepted, self.clock), to= leader_scout)
         record_memory_consumed()
 
@@ -141,14 +128,10 @@ class Acceptor(process):
     def receive(msg= ('p2a', leader_commander, b, s, p, clk)):
         debug('### p2a', leader_commander, b, s, p, clk)
         clock += 1
-        #logger.info("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received P2A message from commander {2}".format(self, self.clock, leader_commander, clk))
         logger_line.append("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received P2A message from commander {2}".format(self, self.clock, leader_commander, clk))
-        #logger_line = '\n'.join(logger_line)
         if b == ballot_num : accepted.add((b, s, p))
         clock += 1
-        #logger.info("{0} {{\"{0}\":{1}}} {0} Sending P2B message to commander {2}".format(self, self.clock, leader_commander))
         logger_line.append("{0} {{\"{0}\":{1}}} {0} Sending P2B message to commander {2}".format(self, self.clock, leader_commander))
-        #logger_line = '\n'.join(logger_line)
         send(('p2b', self, ballot_num, self.clock), to= leader_commander)
         record_memory_consumed()
 
@@ -159,9 +142,7 @@ class Commander(process):
         # added code for logging
         self.logger_line = []
         self.clock = 1
-        #logger.info("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Initiated by leader {2}".format(self, self.clock, leader, clk))
         logger_line.append("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Initiated by leader {2}".format(self, self.clock, leader, clk))
-        #logger_line = '\n'.join(logger_line)
     def record_memory_consumed():
         send(('memory', self, proc.memory_info()[1]/1000), to= parent())
 
@@ -169,21 +150,15 @@ class Commander(process):
         debug('### start')
         clock += 1
         # iterate through all clock values in the map
-        #logger.info("{0} {{\"{0}\":{1}}} {0} Sending P2A message to acceptors".format(self, self.clock))
         logger_line.append("{0} {{\"{0}\":{1}}} {0} Sending P2A message to acceptors".format(self, self.clock))
-        #logger_line = '\n'.join(logger_line)
         send(('p2a', self, b, s, p, self.clock), to= acceptors)
         if await(len(setof(a, received(('p2b', a, _b, _)))) > len(acceptors)/2):
             clock += 1
-            #logger.info("{0} {{\"{0}\":{1}}} {0} Sending decision to replicas".format(self, self.clock))
             logger_line.append("{0} {{\"{0}\":{1}}} {0} Sending decision to replicas".format(self, self.clock))
-            #logger_line = '\n'.join(logger_line)
             send(('decision', s, p, self, self.clock), to= replicas)
         elif some(received(('p2b', _, b1, _)), has= b1 != b):
             clock += 1
-            #logger.info("{0} {{\"{0}\":{1}}} {0} Sending preempted message to leader {2}".format(self, self.clock, leader))
             logger_line.append("{0} {{\"{0}\":{1}}} {0} Sending preempted message to leader {2}".format(self, self.clock, leader))
-            #logger_line = '\n'.join(logger_line)
             send(('preempted', b1, self, self.clock), to= leader)
         logger_line = '\n'.join(logger_line)
         logger.info(logger_line)
@@ -192,10 +167,8 @@ class Commander(process):
     # receive function to handle receiving 'p2b' messages for shiviz visualization
     def receive(msg= ('p2b', p, _, clk)):
         clock += 1
-        #logger.info("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received P2B message from acceptor {2}".format(self, self.clock, p, clk))
         logger_line.append("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received P2B message from acceptor {2}".format(self, self.clock, p, clk))
-        #logger_line = '\n'.join(logger_line)
-
+        
 # spawned by leader for phase 1a and 1b messages of consensus protocol
 class Scout(process):
     def setup(leader, acceptors:set, b, clk):
@@ -204,9 +177,8 @@ class Scout(process):
         # added code for logging
         self.logger_line = []
         self.clock = 1
-        #logger.info("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Initiated by leader {2}".format(self, self.clock, leader, clk))
         logger_line.append("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Initiated by leader {2}".format(self, self.clock, leader, clk))
-        #logger_line = '\n'.join(logger_line)
+        
     def record_memory_consumed():
         send(('memory', self, proc.memory_info()[1]/1000), to= parent())
 
@@ -215,22 +187,16 @@ class Scout(process):
 # add sleep
         time.sleep(random.random()) # next random float in [0.0, 1.0)
         clock += 1
-        #logger.info("{0} {{\"{0}\":{1}}} {0} Sending P1A message to acceptors".format(self, clock))
         logger_line.append("{0} {{\"{0}\":{1}}} {0} Sending P1A message to acceptors".format(self, clock))
-        #logger_line = '\n'.join(logger_line)
         send(('p1a', self, b, self.clock), to= acceptors)
         if await(len(setof(a, received(('p1b', a, _b, _, _)))) > len(acceptors)/2):
             pvalues = setof(v, received(('p1b', _, _b, r, _)), v in r) #accepted
             clock += 1
-            #logger.info("{0} {{\"{0}\":{1}}} {0} Sending adopted message to leader {2}".format(self, clock, leader))
             logger_line.append("{0} {{\"{0}\":{1}}} {0} Sending adopted message to leader {2}".format(self, clock, leader))
-            #logger_line = '\n'.join(logger_line)
             send(('adopted', b, pvalues, self, self.clock), to= leader)
         elif some(received(('p1b', a, b1, _, _)), has= b1 != b):
             clock += 1
-            #logger.info("{0} {{\"{0}\":{1}}} {0} Sending preempted message to leader {2}".format(self, clock, leader))
             logger_line.append("{0} {{\"{0}\":{1}}} {0} Sending preempted message to leader {2}".format(self, clock, leader))
-            #logger_line = '\n'.join(logger_line)
             send(('preempted', b1, self, self.clock), to= leader)
         logger_line = '\n'.join(logger_line)
         logger.info(logger_line)
@@ -239,10 +205,8 @@ class Scout(process):
     # receive function to handle receiving 'p1b' messages for shiviz visualization
     def receive(msg= ('p1b', p, _, _, clk)):
         clock += 1
-        #logger.info("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received P1B message from acceptor {2}".format(self, self.clock, p, clk))
         logger_line.append("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received P1B message from acceptor {2}".format(self, self.clock, p, clk))
-        #logger_line = '\n'.join(logger_line)
-
+        
 # proposes a command to acceptors with ballot number and slot
 class Leader(process):
     def setup(acceptors:set, replicas:set):
@@ -252,9 +216,7 @@ class Leader(process):
         # added code for logging
         self.logger_line = []
         self.clock = 1
-        #logger.info("{0} {{\"{0}\":{1}}} {0} Initialization complete".format(self, self.clock))
         logger_line.append("{0} {{\"{0}\":{1}}} {0} Initialization complete".format(self, self.clock))
-        #logger_line = '\n'.join(logger_line)
 
     def record_memory_consumed():
         send(('memory', self, proc.memory_info()[1]/1000), to= parent())
@@ -262,9 +224,7 @@ class Leader(process):
     def run():
         debug('### start')
         clock += 1
-        #logger.info("{0} {{\"{0}\":{1}}} {0} Initializing Scout".format(self, self.clock))
         logger_line.append("{0} {{\"{0}\":{1}}} {0} Initializing Scout".format(self, self.clock))
-        #logger_line = '\n'.join(logger_line)
         sub = new(Scout, (self, acceptors, ballot_num, self.clock),
                   method='thread', daemon=True)
         start(sub)
@@ -276,16 +236,12 @@ class Leader(process):
     def receive(msg= ('propose', s, p, rpl, clk)):
         debug('### propose', s, p)
         clock += 1
-        #logger.info("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received propose request from replica {2}".format(self, clock, rpl, clk))
         logger_line.append("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received propose request from replica {2}".format(self, clock, rpl, clk))
-        #logger_line = '\n'.join(logger_line)
         if not some((_s, _) in proposals):
             proposals.add((s,p))
             if active:
                 clock += 1
-                #logger.info("{0} {{\"{0}\":{1}}} {0} Initializing Commander".format(self, self.clock))
                 logger_line.append("{0} {{\"{0}\":{1}}} {0} Initializing Commander".format(self, self.clock))
-                #logger_line = '\n'.join(logger_line)
                 sub = new(Commander,
                           (self, acceptors, replicas, ballot_num, s, p, self.clock),
                           method='thread', daemon=True)
@@ -295,15 +251,11 @@ class Leader(process):
     def receive(msg= ('adopted', ballot_num, pvals, scout, clk)):
         debug('### adopted', ballot_num, pvals)
         clock += 1
-        #logger.info("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received adopted message from scout {2}".format(self, self.clock, scout, clk))
         logger_line.append("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received adopted message from scout {2}".format(self, self.clock, scout, clk))
-        #logger_line = '\n'.join(logger_line)
         proposals = circle_plus(proposals, pmax(pvals))
         for (s, p) in proposals:
             clock += 1
-            #logger.info("{0} {{\"{0}\":{1}}} {0} Initializing Commander".format(self, self.clock))
             logger_line.append("{0} {{\"{0}\":{1}}} {0} Initializing Commander".format(self, self.clock))
-            #logger_line = '\n'.join(logger_line)
             sub = new(Commander,
                       (self, acceptors, replicas, ballot_num, s, p, self.clock),
                       method='thread', daemon=True)
@@ -313,9 +265,7 @@ class Leader(process):
 
     def receive(msg= ('preempted', (r1, leader1), proc, clk)):
         clock += 1
-        #logger.info("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received preempted message from {2}".format(self, self.clock, proc, clk))
         logger_line.append("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received preempted message from {2}".format(self, self.clock, proc, clk))
-        #logger_line = '\n'.join(logger_line)
         if (r1, leader1) > ballot_num:
             active = False
             ballot_num = (r1 + 1, self)
@@ -341,10 +291,8 @@ class Client(process):
         # added code for logging
         self.logger_line = []
         self.clock = 1
-        #logger.info("{0} {{\"{0}\":{1}}} {0} Initialization complete".format(self, self.clock))
         logger_line.append("{0} {{\"{0}\":{1}}} {0} Initialization complete".format(self, self.clock))
-        #logger_line = '\n'.join(logger_line)
-
+        
     def record_memory_consumed():
         send(('memory', self, proc.memory_info()[1]/1000), to= parent())
 
@@ -352,9 +300,7 @@ class Client(process):
         for i in range(nops):
             clock += 1
             # logging and sending the message from client to all replicas
-            #logger.info("{0} {{\"{0}\":{1}}} {0} Sending request {2} to all replicas.".format(self, clock, cid))
             logger_line.append("{0} {{\"{0}\":{1}}} {0} Sending request {2} to all replicas.".format(self, clock, cid))
-            #logger_line = '\n'.join(logger_line)
             send(('request', (self, cid, random.randint(0, NOPS-1)), clock),
                  to= replicas)
             await(cid in results)
@@ -370,9 +316,7 @@ class Client(process):
     def receive(msg= ('response', cid, result, rpl, clk)):
         debug('### response', cid, result)
         clock += 1
-        #logger.info("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received response from replica {2}".format(self, self.clock, rpl, clk))
         logger_line.append("{0} {{\"{0}\":{1}, \"{2}\":{3}}} {0} Received response from replica {2}".format(self, self.clock, rpl, clk))
-        #logger_line = '\n'.join(logger_line)
         if cid not in results:
             results[cid] = result
         elif results[cid] != result:
