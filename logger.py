@@ -3,14 +3,14 @@ import logging.handlers
 import os
 
 # create logger
-logger = logging.getLogger('vrpaxos')
+logger = logging.getLogger('shiviz-logs')
 logger.setLevel(logging.INFO)
 
 # create console handler and set level to info
 ch = logging.StreamHandler()
 ch.setLevel(logging.INFO)
 
-filename = "vrpaxos.log"
+filename = "shiviz-logs"
 should_roll_over = os.path.isfile(filename)
 handler = logging.handlers.RotatingFileHandler(filename, mode='w')
 if should_roll_over:  # log already exists, roll over!
