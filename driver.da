@@ -4,19 +4,13 @@ def da_paxos():
     print("RUNNING DA PAXOS")
     params = input("ENTER VALUES FOR COUNT OF: {acceptors} {replicas} {leaders} {clients} {operations} {runs}\nPress Enter to skip")
     module = import_da("stats_monitor")
-    os.system('python -m da -m stats_monitor ')
-
-def python_paxos():
-    print("RUNNING PYTHON PAXOS")
+    os.system('python -m da -m stats_monitor ' + params)
 
 def da_raft():
     print("RUNNING DA PAXOS")
     params = input("ENTER VALUES FOR COUNT OF: {servers} {clients} {requests} {maxtimeout} {send_failrate} {runs}\nPress Enter to skip")
     module = import_da("monitor_raft")
     os.system('python -m da -m monitor_raft '+ params)
-
-def python_raft():
-    print("RUNNING PYTHON RAFT")
 
 def nothing():
     print("\nWrong Selection")
@@ -25,12 +19,10 @@ def nothing():
 def initiate():
     switcher = {
         1: da_paxos,
-        2: python_paxos,
-        3: da_raft,
-        4: python_raft
+        2: da_raft
         }
 
-    print("\nChoose the algorithm to run:\n1. DistAlgo Paxos\n2. Python Paxos \n3. DistAlgo Raft\n4. Python Raft\n")
+    print("\nChoose the algorithm to run:\n1. DistAlgo Paxos\n2. DistAlgo Raft\n")
     algo = input("Input: ")
 
     switcher.get(int(algo), nothing)()
