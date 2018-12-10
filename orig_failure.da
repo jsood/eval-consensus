@@ -143,10 +143,6 @@ class Commander(process):
         clock += 1
         # iterate through all clock values in the map
         logger.info("{0} {{\"{0}\":{1}}} {0} Sending P2A message to acceptors".format(self, self.clock))
-        
-        # send message to parent to kill commander to test performance in case of leader crash
-        #process = psutil.Process(os.getpid())
-        #send(('kill_me_now', self), to=parent())
 
         send(('p2a', self, b, s, p, self.clock), to= acceptors)
         if await(len(setof(a, received(('p2b', a, _b, _)))) > len(acceptors)/2):
@@ -264,11 +260,6 @@ class Leader(process):
                       method='thread', daemon=True)
             start(sub)
             record_memory_consumed()
-
-    # def receive(msg= ('kill_me_now', p)):
-    #    output('KILL ME',p)
-    #    end(p)
-    #    send(('kill_me_now', self), to=parent())
 
     def circle_plus(x, y):
         return y | setof((s, p), (s, p) in x, not some((_s, _) in y))
