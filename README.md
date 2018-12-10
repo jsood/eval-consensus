@@ -1,6 +1,30 @@
 # Performance comparison for consensus algorithms
 <https://sites.google.com/a/stonybrook.edu/sbcs535/projects/eval-consensus-distalgo>
 
+## Steps to Run
+
+### For Performance Comparison
+
+a. driver_test_perf.da - Run driver_perf.da using "python -m da driver_test_perf.da". It will give us2 options to choose implementations to run - DistAlgo Paxos and DistAlgo Raft.
+
+b. On entering 1,  it asks for DistAlgo Paxos to choose from varying number of acceptors andnumber of requests per client.  On entering ’a’,  it runs DistAlgo Paxos for varying range ofacceptors. On entering ’b’, it runs DistAlgo Paxos for varying range of requests per client.
+
+c. On entering 2, it asks for DistAlgo Raft to choose from varying number of servers and numberof requests per client.  On entering ’a’, it runs DistAlgo Raft for varying range of servers.  On entering ’b’, it runs DistAlgo Raft for varying range of requests per client.
+
+d. Two log files named raftlogfile.csv and paxoslogfile.csv will be generated.
+
+e. Run Perf.Vis.da and 3 pdf files will be generated with names output1.pdf,  output2.pdf andoutput3.pdf will be generated containing the performance comparison visualizations
+
+### For ShiViz Logs
+
+a. driver.daRun driver.da using "python -m da driver.da".  It will give us 2 options to chooseimplementations to run - DistAlgo Paxos and DistAlgo Raft.
+
+b. For example: Choose 1 for running DistAlgo Paxos for generating logs for Shiviz. Enter 3 2 1 1 11 for count of accpetors, replicas, leaders, clients, operations and runs respectively.•A file named vrpaxos-buffer.log file is generated.
+
+c. Open "https://bestchai.bitbucket.io/shiviz/" and click on ’Try out on ShiViz’, upload the logfile "vrpaxos-buffer.log" and click on Visualize.
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
 ## Details of implementation:
 1. Monitor Programs: We have a monitor program per consensus implementation written in DistAlgo to compare the implementations. The monitors run the implementations with a varied set of input parameters, and also capture the messages (containing memory consumption data) sent from the implementations. 
 vrPaxos Monior: (https://github.com/unicomputing/eval-consensus-py/blob/master/stats_monitor.da)
@@ -14,24 +38,3 @@ Raft Monitor: (https://github.com/unicomputing/eval-consensus-py/blob/master/mon
 
 5. Visualizations: As of now, we have created a file to externally read the log files and generate the graphs using the matplotlib library in python. The code for Chart generator is given in Github link: https://github.com/unicomputing/eval-consensus-py/blob/master/Perf_Vis.da. We are planning to execute this from monitor program to reduce the extra number of files. A sample set of charts can be found at: https://github.com/unicomputing/eval-consensus-py/blob/master/perf_vis.pdf.
 
-++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-command used to generate vrpaxos shiviz logs: 
-python -m da orig.da 3 2 1 1 1
-
-copy-paste contents of vrpaxos.log into shiviz tool. Use following as log parsing regular expression:
-```
-(?<host>\S*) (?<clock>{.*})\ (?<event>.*)
-```
-## Steps to Run
-### For Performance Comparison
-a. driver_test_perf.da - Run driver_perf.da using "python -m da driver_test_perf.da". It will give us2 options to choose implementations to run - DistAlgo Paxos and DistAlgo Raft.
-b. On entering 1,  it asks for DistAlgo Paxos to choose from varying number of acceptors andnumber of requests per client.  On entering ’a’,  it runs DistAlgo Paxos for varying range ofacceptors. On entering ’b’, it runs DistAlgo Paxos for varying range of requests per client.
-c. On entering 2, it asks for DistAlgo Raft to choose from varying number of servers and numberof requests per client.  On entering ’a’, it runs DistAlgo Raft for varying range of servers.  On entering ’b’, it runs DistAlgo Raft for varying range of requests per client.
-d. Two log files named raftlogfile.csv and paxoslogfile.csv will be generated.
-e. Run Perf.Vis.da and 3 pdf files will be generated with names output1.pdf,  output2.pdf andoutput3.pdf will be generated containing the performance comparison visualizations
-
-### For ShiViz Logs
-a. driver.daRun driver.da using "python -m da driver.da".  It will give us 2 options to chooseimplementations to run - DistAlgo Paxos and DistAlgo Raft.
-b. For example: Choose 1 for running DistAlgo Paxos for generating logs for Shiviz. Enter 3 2 1 1 11 for count of accpetors, replicas, leaders, clients, operations and runs respectively.•A file named vrpaxos-buffer.log file is generated.
-c. Open "https://bestchai.bitbucket.io/shiviz/" and click on ’Try out on ShiViz’, upload the logfile "vrpaxos-buffer.log" and click on Visualize.
