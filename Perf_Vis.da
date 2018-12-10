@@ -1,30 +1,29 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
-from collections import namedtuple
 import pandas as pd
+import seaborn as sns
 
-# import csv file
-data = pd.read_csv('logfile.csv')
-n_groups = 4
+# import csv files
+class Perf_Vis:
+  def visualize(self):
+    df = pd.DataFrame()
+    algos = ['paxos', 'raft']
+    for algo in algos:
+      df = df.append(pd.read_csv(algo+'logfile.csv'))
+    plt.figure()
+    sns.set_style("whitegrid")
+    sns.factorplot(x='operations', y='latency', hue='program', data=df, ci = None)
+    plt.savefig("output1.pdf")
+    plt.figure()
+    sns.set_style("whitegrid")
+    sns.factorplot(x='operations', y='cpu_time', hue='program', data=df, ci = None)
+    plt.savefig("output2.pdf")
+    plt.figure()
+    sns.set_style("whitegrid")
+    sns.factorplot(x='operations', y='cpu_memory(kB)', hue='program', data=df, ci = None)
+    plt.savefig("output3.pdf")
 
-fig, ax = plt.subplots()
-
-index = np.arange(n_groups)
-bar_width = 0.35
-
-# bar graph for elapsed time per run
-rects1 = ax.bar(data['runs'], data['elapsed_time'], bar_width, color='b',
-                label='Elapsed Time')
-
-# bar graph for cpu time per run
-rects2 = ax.bar(data['runs'], data['cpu_time'], bar_width, color='r',
-                label='CPU Time')
-
-ax.set_xlabel('Runs')
-ax.set_ylabel('Elapsed Time')
-ax.set_title('Elapsed Time per run')
-ax.legend()
-
-fig.tight_layout()
-fig.savefig("perf_vis.pdf", bbox_inches='tight')
+def main():
+  perf = Perf_Vis()
+  perf.visualize()
