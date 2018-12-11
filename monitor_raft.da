@@ -1,14 +1,12 @@
 import sys
 import time
 import psutil
-#import raft
-
-# File to log performance statistics for raft distalgo implementation
-logfile = "raft_da_perf.csv"
+import raft
+import raft_failure
 
 # Statistics Class: Sets up the implementation and Calculates and logs performance metrics.
 class Stat(process):
-    def setup(algo, nservers, nclients, nrequests, maxtimeout, send_failrate, runs):
+    def setup(algo, nservers, nclients, nrequests, maxtimeout, send_failrate, runs, leader_failure):
         pass
 
     # gets the performance metrics before algorithm starts
@@ -19,7 +17,7 @@ class Stat(process):
     def end_stats(start_time, start_time_c):
         e_time = time.time() - start_time
         c_time = psutil.cpu_times().user - start_time_c
-        return('raft,'+str(nservers), + ',' + str(nrequests), + ',' + str(runs) + ',' + str(e_time) + ',' + str(c_time))
+        return('raft,' + str(nservers) + ',' + str(nrequests) + ',' + str(runs) + ',' + str(e_time) + ',' + str(c_time))
 
     # starts all the processors
     def start_module(servers, clients):
@@ -63,6 +61,13 @@ class Stat(process):
         # start clients and server for raft
         start_module(servers, clients)
 
+        # killing a leader once to check the performance of algorithm in case of leader failure
+        if leader_failure != 0:
+            await(received(('kill_me_now',)))
+            proc_list = list(setof(s, received(('kill_me_now',), from_=s)))
+            output(" ################ killing leader", proc_list[0], "###################")
+            end(proc_list[0])
+
         # wait for clients to finish
         await(each(c in clients, has=received(('Done',), from_=c)))
         output("All clients done.")
@@ -82,8 +87,10 @@ class Stat(process):
 
     def run():
         output('-------------------',algo,': run',runs, 'started---------------------')
-        module = import_da(algo)
-        #module = raft
+        #module = import_da(algo)
+        module = raft
+        if leader_failure != 0:
+            module = raft_failure
         algorun(module)
 
 def main():
@@ -93,8 +100,14 @@ def main():
     maxtimeout = int(sys.argv[4]) if len(sys.argv) > 4 else 3000
     send_failrate = float(sys.argv[5]) if len(sys.argv) > 5 else 0.0
     repetitions = int(sys.argv[6]) if len(sys.argv) > 6 else 8
+    leader_failure = int(sys.argv[7]) if len(sys.argv) > 7 else 0 
 
-    # initial heading to the logfile added
+    module = 'raft'
+    if leader_failure != 0:
+        module = 'raft_failure'
+        output("raft failure called")
+
+    # File to log performance statistics for raft distalgo implementation
     #if nrequests == 1:
     f = open("raftlogfile.csv", "w")
     f.write('program,servers,operations,runs,elapsed_time,cpu_time,cpu_memory(kB)\n')
@@ -103,7 +116,7 @@ def main():
     # setting up and starting stats process for n repetitions
     run = 1
     while run <= repetitions:
-        stat_proc = new(Stat, ('raft', nservers, nclients, nrequests, maxtimeout, send_failrate, run), num= 1)
+        stat_proc = new(Stat, (module, nservers, nclients, nrequests, maxtimeout, send_failrate, run, leader_failure), num= 1)
         start(stat_proc)
         await(each(p in stat_proc, has=received(('done',), from_=p)))
         run += 1

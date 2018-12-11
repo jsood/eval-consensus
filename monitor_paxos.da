@@ -1,11 +1,13 @@
 import sys
 import time
 import psutil
-#import orig
+from logger import logger
+import orig
+import orig_failure
 
 # Statistics Class: Sets up the implementation and Calculates and logs performance metrics.
 class Stat(process):
-    def setup(algo, nacceptors, nreplicas, nleaders, nclients, nops, runs):
+    def setup(algo, nacceptors, nreplicas, nleaders, nclients, nops, runs, leader_failure):
         pass
 
     # gets the performance metrics before algorithm starts
@@ -63,6 +65,13 @@ class Stat(process):
 
         start_module(acceptors, replicas, leaders, clients)
 
+        # killing a leader once to check the performance of algorithm in case of leader failure
+        if leader_failure != 0:
+            await(received(('kill_me_now',)))
+            proc_list = list(setof(s, received(('kill_me_now',), from_=s)))
+            output("################ killing leader", proc_list[0], "################")
+            end(proc_list[0])
+
         # waits for all the clients to be done
         await(each(c in clients, has=received(('done',), from_=c)))
         output('All clients done.')
@@ -81,7 +90,10 @@ class Stat(process):
 
     def run():
         output('-------------------',algo,': run',runs,' started---------------------')
-        module = import_da(algo)
+        #module = import_da(algo)
+        module = orig
+        if leader_failure != 0:
+            module = orig_failure
         algorun(module)
 
 def main():
@@ -91,17 +103,22 @@ def main():
     nclients = int(sys.argv[4]) if len(sys.argv) > 4 else 3
     nops = int(sys.argv[5]) if len(sys.argv) > 5 else 3
     repetitions = int(sys.argv[6]) if len(sys.argv) > 6 else 8
+    leader_failure = int(sys.argv[7]) if len(sys.argv) > 7 else 0 
 
-    # initial heading to the logfile added
+    module = 'orig'
+    if leader_failure != 0:
+        module = 'orig_failure'
+
+    # File to log performance statistics for paxos distalgo implementation
     #if nops == 1:
     f = open("paxoslogfile.csv", "w")
     f.write('program,servers,operations,runs,elapsed_time,cpu_time,cpu_memory(kB)\n')
     f.close()
     n = repetitions
-
+        
     # setting up and starting stats process for n repetitions
     while n>0:
-        stat_proc = new(Stat, ('orig', nacceptors, nreplicas, nleaders, nclients, nops, repetitions+1-n), num= 1)
+        stat_proc = new(Stat, (module, nacceptors, nreplicas, nleaders, nclients, nops, repetitions+1-n, leader_failure), num= 1)
         start(stat_proc)
         await(each(p in stat_proc, has=received(('done',), from_=p)))
         n=n-1

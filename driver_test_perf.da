@@ -4,10 +4,23 @@ class Driver:
     def da_paxos(self):
         print("RUNNING DA PAXOS")
         params_type = input("Enter 'a' for comparison for varying number of Acceptors\nEnter 'b' for comparison for varying numbers of Client Requests\n")
-        if str(params_type) == 'a':
-          params = ["3 2 2 2 3 8","5 3 2 3 3 8","7 4 2 4 3 8","9 5 2 5 3 8","11 6 2 6 3 8"]
-        elif str(params_type) == 'b':
-          params = ["5 2 2 2 1 8","5 2 2 2 3 8","5 2 2 2 5 8","5 2 2 2 7 8","5 2 2 2 9 8"]
+        fail_mode = input("Leader Failure Mode:\n Enter '1' for YES, '0' for NO\n")
+        if str(fail_mode) == '0':
+          if str(params_type) == 'a':
+            params = ["3 2 2 2 3 8","5 3 2 3 3 8","7 4 2 4 3 8","9 5 2 5 3 8","11 6 2 6 3 8"]
+          elif str(params_type) == 'b':
+            params = ["5 2 2 2 1 8","5 2 2 2 3 8","5 2 2 2 5 8","5 2 2 2 7 8","5 2 2 2 9 8"]
+          else:
+            print("Invalid Input")
+            self.da_paxos()
+        elif str(fail_mode) == '1':
+          if str(params_type) == 'a':
+            params = ["3 2 2 2 3 8 1","5 3 2 3 3 8 1","7 4 2 4 3 8 1","9 5 2 5 3 8 1","11 6 2 6 3 8 1"]
+          elif str(params_type) == 'b':
+            params = ["5 2 2 2 1 8 1","5 2 2 2 3 8 1","5 2 2 2 5 8 1","5 2 2 2 7 8 1","5 2 2 2 9 8 1"]
+          else:
+            print("Invalid Input")
+            self.da_paxos()
         else:
           print("Invalid Input")
           self.da_paxos()
@@ -16,14 +29,27 @@ class Driver:
 
     def da_raft(self):
         print("RUNNING DA RAFT")
-        params_type = input("Enter 1 for comparison for varying number of Servers\nEnter 2 for comparison for varying numbers of Client Requests\n")
-        if str(params_type) == 'a':
-          params = ["3 2 3 3000 0.0 8","","7 4 3 3000 0.0 8","9 5 3 3000 0.0 8","11 6 3 3000 0.0 8"]
-        elif str(params_type) == 'b':
-          params = ["5 2 1 3000 0.0 8","5 2 3 3000 0.0 8","5 2 5 3000 0.0 8","5 2 7 3000 0.0 8","5 2 9 3000 0.0 8"]
+        params_type = input("Enter 'a' for comparison for varying number of Servers\nEnter 'b' for comparison for varying numbers of Client Requests\n")
+        fail_mode = input("Leader Failure Mode:\n Enter '1' for YES, '0' for NO\n")
+        if str(fail_mode) == '0':
+          if str(params_type) == 'a':
+            params = ["3 2 3 3000 0.0 8","","7 4 3 3000 0.0 8","9 5 3 3000 0.0 8","11 6 3 3000 0.0 8"]
+          elif str(params_type) == 'b':
+            params = ["5 2 1 3000 0.0 8","5 2 3 3000 0.0 8","5 2 5 3000 0.0 8","5 2 7 3000 0.0 8","5 2 9 3000 0.0 8"]
+          else:
+            print("Invalid Input")
+            self.da_raft()
+        elif str(fail_mode) == '1':
+          if str(params_type) == 'a':
+            params = ["3 2 3 3000 0.0 8 1","5 3 3 3000 0.0 8 1","7 4 3 3000 0.0 8 1","9 5 3 3000 0.0 8 1","11 6 3 3000 0.0 8 1"]
+          elif str(params_type) == 'b':
+            params = ["5 2 1 3000 0.0 8 1","5 2 3 3000 0.0 8 1","5 2 5 3000 0.0 8 1","5 2 7 3000 0.0 8 1","5 2 9 3000 0.0 8 1"]
+          else:
+            print("Invalid Input")
+            self.da_raft()
         else:
           print("Invalid Input")
-          self.da_raft()
+          self.da_paxos()
         for param in params:
             os.system('python -m da monitor_raft.da '+ param)
 
