@@ -11,9 +11,11 @@ b. On entering 1,  it asks for DistAlgo Paxos to choose from varying number of a
 
 c. On entering 2, it asks for DistAlgo Raft to choose from varying number of servers and numberof requests per client.  On entering ’a’, it runs DistAlgo Raft for varying range of servers.  On entering ’b’, it runs DistAlgo Raft for varying range of requests per client.
 
-d. Two log files named raftlogfile.csv and paxoslogfile.csv will be generated.
+d. The default values for paxos are 5 acceptors, 4 replicas, 2 leaders, 3 clients, 3 requests and 8 runs.Default values for raft are 5 servers, 3 clients, 3 requests, 3000 timeout and 8 runs. All runs bydefault are without leader crash.
 
-e. Run Perf.Vis.da and 3 pdf files will be generated with names output1.pdf,  output2.pdf andoutput3.pdf will be generated containing the performance comparison visualizations
+e. Two log files named raftlogfile.csv and paxoslogfile.csv will be generated.
+
+f. Run Perf.Vis.da and 3 pdf files will be generated with names output1.pdf,  output2.pdf andoutput3.pdf will be generated containing the performance comparison visualizations
 
 ### For ShiViz Logs
 
