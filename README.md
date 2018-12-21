@@ -40,3 +40,27 @@ Raft Monitor: (https://github.com/unicomputing/eval-consensus-py/blob/master/mon
 
 5. Visualizations: As of now, we have created a file to externally read the log files and generate the graphs using the matplotlib library in python. The code for Chart generator is given in Github link: https://github.com/unicomputing/eval-consensus-py/blob/master/Perf_Vis.da. We are planning to execute this from monitor program to reduce the extra number of files. A sample set of charts can be found at: https://github.com/unicomputing/eval-consensus-py/blob/master/perf_vis.pdf.
 
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+### For adding a new consensus implementation in the framework
+
+1. Understand the underlying algorithm: We need to study how the consensus happens. This will help us to understand the underlying protocols, and also explain the number and type of the messages passed at each iteration. As and when the performance metrics, generated from the driver programs, would give us charts and graphs for varied input parameters, this understanding of the algorithms would help us to draw interesting inferences from them. 
+
+2. Necessary modifications in the implementation: 
+
+Define 'self.proc = psutil.Process(od.getpid())' in the setup of each process in the new implementation. Also, copy below function "record_memory_consumed()" to each process in the implementation, just like we have defined it inside orig.da and raft.da. 
+
+def record_memory_consumed():
+    send(('memory', self, proc.memory_info()[1]/1000), to=parent())
+
+Now, inside the new implementation, in each function of all processes, call "record_memory_consumed()" once inside each process.
+
+3. We need to write the driver code to extract performance metrics of running times and memory consumption as described now. We have introduced a new DistAlgo file "monitor_stub.da". This stub file has specific 5 (five) places where code changes has to be made to create a new driver for any DistAlgo/ Python implementation. For ease of understanding, all these places have been demarcated in the stub code file with the comment "custom user code:".
+
+    a. Going by the order of arrangement, firstly we need to modify the methods "start_module" and "end_module" to start and end all the participating components (processes, servers etc.). We have added two sample components (processes, clients) in each of these modules to show how this has to be done.
+    b. At the next step, we have to start and setup all the constituent processes and components, and vary their values accrodingly with corresponding user inputs. 
+    c. After this, we have kept a place to pass on appropriate parameters (as set up on step c) into the start_module method and start off the driver.
+    d. We have also created place after that where we send a message "done" to the parent process to inform that the performance run has been completed.
+    e. Lastly, we have a place for setting up and starting the stat processes for n repetitions. 
+
+4. We now need to run Perf_Vis.da. It automatically reads the log files and generate performance comparison graphs.
