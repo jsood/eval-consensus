@@ -1,0 +1,120 @@
+import sys
+import time
+import psutil
+import os
+from logger import logger
+
+filename = "vr-revisited-filename.csv"
+# Statistics Class: Sets up the implementation and Calculates and logs performance metrics.
+class Stat(process):
+    def setup(algo, NumReplicas, NumClients, nops, runs):
+        pass
+
+    # gets the performance metrics before algorithm starts
+    def start_stats():
+        return(time.time(), psutil.cpu_times().user)
+
+    # gets the performance metrics before algorithm ends
+    def end_stats(start_time, start_time_c):
+        e_time = time.time() - start_time
+        c_time = psutil.cpu_times().user - start_time_c
+        return(algo+','+str(NumReplicas)+ ',' + str(nops)+ ',' + str(runs) + ',' + str(e_time) + ',' + str(c_time))
+
+#-----------------------------------------custom user code: start all processes :: start---------------------------------------
+    def start_module(replicas, clients):
+        start(replicas)
+        start(clients)
+#-----------------------------------------custom user code: start all processes :: end-----------------------------------------
+#-----------------------------------------custom user code: end all processes :: start-----------------------------------------
+    def end_module(replicas, clients):
+        #await(each(c in clients, has=received(('done',), from_=c)))
+        #output('All clients done.')
+        # informs all the processes to end
+        #send(('done',), to= (processes))
+        return True
+#----------------------------------------custom user code: end all processes :: end--------------------------------------------
+
+    # logs statistics to file
+    def write_to_file(stats):
+        f = open('vr-revisited-logfile.csv', "a")
+        f.write(stats)
+        f.close()
+
+    # collect all the memory consumption statistics received from clients and servers
+    def collect_memory_stats():
+        # create a set of (p, m) values
+        procmem = setof((p,m), received(('memory', p, m)))
+        output('inside stub:-------------------------')
+        output(procmem)
+        procs = setof(p, received(('memory', p, _)))
+        output(procs)
+        total_memory_consumed = 0
+        for p in list(procs):
+            memset = setof(m, received(('memory', _p, m)))
+            mem = 0
+            for m in memset:
+                mem += m
+            # find the average memory consumed by thr process
+            avg_mem = mem/len(memset)
+            # add to the total memory consumed by current run
+            total_memory_consumed += avg_mem
+        return (','+ str(total_memory_consumed) + '\n')
+
+    # sets up processes and calls internal methods
+    def algorun(module):
+#------------------------------custom user code: setup and start all the processes and clients:: start-----------------------
+        #processes = new(module.Process, (), num= nprocesses)
+        #clients = new(module.Client, (), num= nclients)
+        replicas = list(new(module.Replica,num=NumReplicas))
+        clients = new(module.Client, (replicas, nops,), num=NumClients)
+        setup(replicas,(replicas,))
+#------------------------------custom user code: setup and start all the processes and clients:: end-------------------------
+
+        start_time, start_time_c = start_stats()
+
+#------------------------------custom user code: pass parameters according to implementation:: start-------------------------
+        start_module(replicas, clients)
+
+        # waits for all the clients to be done
+        #await(end_module(processes, clients))
+#------------------------------custom user code: pass parameters according to implementation:: start--------------------------
+
+        # collect end time statistics and write to log file
+        stats = end_stats(start_time, start_time_c)
+
+        # Collect the total memory consumed by clients and servers
+        stats += collect_memory_stats()
+        write_to_file(stats)
+
+#------------------------------custom user code: Sending done to main() to inform it to end:: start---------------------------
+        send(('done',), to= parent())
+#------------------------------custom user code: Sending done to main() to inform it to end:: end-----------------------------
+
+    def run():
+        output('---------',algo,': run',runs,' started---------')
+        module = import_da(algo)
+        output('parent from self process')
+        output(self)
+        algorun(module)
+
+def main():
+    NumReplicas = int(sys.argv[1]) if len(sys.argv) > 1 else 3
+    NumClients = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+    nops = int(sys.argv[3]) if len(sys.argv) > 3 else 5
+    runs = int(sys.argv[4]) if len(sys.argv) > 4 else 4
+
+    # initial heading to the logfile added
+    # if nops == 1:
+    f = open('vr-revisited-logfile.csv', 'w')
+    f.write('program,servers,operations,runs,elapsed_time,cpu_time,cpu_memory(kB)\n')
+    f.close()
+    n = nops
+#--------------------custom user code: setting up and starting stats process for n repetitions :: start----------------------
+    while n>0:
+        stat_proc = new(Stat, ('vr-revisited', NumReplicas, NumClients, nops+1-n, runs), num= 1)
+        start(stat_proc)
+        # We are explicitly sending done to parent when clients are done
+        await(each(p in stat_proc, has=received(('done',), from_=p)))
+        n=n-1
+        output('done')
+#---------------------custom user code: setting up and starting stats process for n repetitions :: end------------------------

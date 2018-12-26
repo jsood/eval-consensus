@@ -1,0 +1,288 @@
+import sys
+import random
+import csv
+import time
+
+debug = False
+
+class TestCase():
+    def __init__(self,n_clients, n_replicas, testNum):
+        self.n_replicas = n_replicas
+        self.n_clients = n_clients
+        self.testNum = testNum
+        # Initialize with default values for the test data in case user doesn't provide these
+        self.test_name = "TestCase" + str(testNum)
+        self.error_type = "crash"
+        self.node_type = "replica"
+        self.node_num = random.randint(0,n_replicas)
+        self.error_msg_count = random.randint(0, 100)
+        self.revive_time = 0
+
+        self.valid_error_types = {"crash"}
+        self.valid_node_types = {"client", "replica"}
+
+    def set_test_name(self,val):
+        val = val.strip()
+        self.test_name = val
+
+    def set_error_type(self,val):
+        val = val.strip()
+        self.error_type = val   
+
+    def set_node_type(self,val):
+        val = val.strip()
+        self.node_type = val 
+
+    def set_node_num(self,val):
+        val = val.strip()
+        val = int(val)
+        self.node_num = val
+
+    def set_error_msg_count(self,val):
+        val = val.strip()
+        val = int(val)
+        self.error_msg_count = val   
+
+    def set_revive_time(self,val):
+        val = val.strip()
+        val = int(val)
+        self.revive_time = val 
+
+    def validate_input(self):
+
+        node_type = self.node_type
+        error_type = self.error_type
+
+        if error_type not in self.valid_error_types:
+            return False
+        if node_type not in self.valid_node_types:
+            return False  
+        else:
+            if((node_type == "client" and self.node_num > self.n_clients) or (node_type == "replica" and self.node_num > self.n_replicas)):
+                return False
+        return True
+
+    def print(self):
+        print("*****************************Test Info Begin*************************")
+        print("Test Num:", self.testNum)
+        print("Test Name:", self.test_name)
+        print("Error Type:", self.error_type)
+        print("Node Type:", self.node_type)
+        print("Node Num:", self.node_num)
+        print("Error Msg Count:", self.error_msg_count)
+        print("Revive Time:", self.revive_time)
+        print("*****************************Test Info End ***************************")
+
+class TestManager(process):
+    
+    def setup(replicas:list, clients, filename):
+        output('--------------- Test Manager Setup--------------')
+        self.n_replicas = len(replicas)
+        self.n_clients = len(clients)
+        output('Number of Clients Registered: ', n_clients)
+        output('Number of Replicas Registered: ', n_replicas)
+        self.client_logs = dict()
+        self.replica_logs = dict()
+        self.replica_logs_avail = False
+        self.client_logs_avail = False
+
+
+        # Test Related DS
+        self.filename = filename
+        self.lines = []
+        self.total_tests = 0
+        self.testList = []
+        self.valid_fields = {"test_name","error_type", "node_type" ,"node_num", "revive_time", "error_msg_count"}
+        if not read_config_file(filename):
+            return
+        if not parse_config_file():
+            return
+        print("Config File has been successfully parsed and test data has been populated")
+
+    def populate_test_data(test, line):
+        
+        field, val = line.split(":")
+        field = field.strip()
+        field = field.lower()
+        #print(field,val)
+        if field not in valid_fields:
+            return False
+
+        if field == "test_name":
+            test.set_test_name(val)
+            return True
+        if field == "error_type":
+            test.set_error_type(val)
+            return True
+
+        if field == "node_type":
+            test.set_node_type(val)
+            return True
+
+        if field == "node_num":
+            test.set_node_num(val)
+            return True
+
+        if field == "error_msg_count":
+            test.set_error_msg_count(val)
+            return True
+
+        if field == "revive_time":
+            test.set_revive_time(val)
+            return True
+
+        return False
+
+    def parse_config_file():
+        test = None
+        state = "READ_NEXT_TEST"
+        for idx, line in enumerate(lines):
+
+            if line == "" or line[0] == '#':
+                continue
+
+            #print("Parsing line:", line)
+
+            if line == "{" and state == "READ_NEXT_TEST":
+                test = TestCase(n_clients, n_replicas, total_tests)
+                state = "READ_TEST_DATA"
+            
+            elif line == "}" and state == "READ_TEST_DATA":
+                if test.validate_input():
+                    testList.append(test)
+                    total_tests = total_tests + 1
+                    state = "READ_NEXT_TEST"
+                else:
+                    del(test)
+                    output("ERROR:: LINE NUMBER :" , idx+1 ,"INVALID CONFIG FILE FORMAT. PARSER WILL STOP HERE")
+                    state = "INVALID"
+                    break
+
+            elif state  == "READ_TEST_DATA":
+                if not populate_test_data(test, line):
+                    del (test)
+                    output("ERROR :: Invalid data field tag in line :", line, "at line no:", idx+1)
+                    state = "INVALID"
+                    break;
+
+            else:
+                output("ERROR :: Unexpected characters", line, "at line:", idx+1)
+                state = "INVALID"
+                break
+
+        status = True if state == "READ_NEXT_TEST" else False
+        return status
+
+
+    def read_config_file(filename):
+        success = True
+        output("READ_CONFIG_FILE :: Trying to open config file for reading :", filename)
+        try:
+            with open(filename, "r") as file:
+                output("READ_CONFIG_FILE :: Successfully opened file for reading")
+                for line in file:
+                    line = line.strip()
+                    lines.append(line)
+            
+        except:
+            output("READ_CONFIG_FILE :: File" ,filename, "passed by user doesn't exists")
+            success = False
+
+        return success
+
+    def inject_error():
+        output('---------------Sending Error Message to client--------------')
+        send(('error',1), to=clients)
+        send(('error',1), to=replicas)
+        send(('error',2), to=clients)
+        send(('error',2), to=replicas)
+
+
+
+    def test_and_validate():
+        output('---------------Start Testing--------------')
+        #inject_error()
+        for test in testList:
+            #test.print()
+            pass
+
+    def handle_client_msgs(state, node, v):
+            client_info[node] = (state, v)
+
+    def handle_replica_msgs(state, node, v, k):
+            replica_info[node] = (state, v, k)
+    
+    def check_lists(l1, l2):
+        if len(l1) != len(l2):
+            return False
+        for i in range(len(l1)):
+            if l1[i] != l2[i]:
+                return False
+        return True
+
+    def check_correctness():                    # Safety : The correctness condition for view changes is that every committed operation survives into all subsequent
+                                                # views in the same position in the serial order. Section 8.1 and Page no: 12 
+        ans = []
+        for key, value in replica_logs.items():
+            if ans == []:
+                ans = value
+            else:
+                if not check_lists(ans, value):
+                    return "0"
+        return "1"
+
+    def get_perf_data():
+        total_latency = 0.0
+        num_req = 0
+        for c in client_logs:
+            log = client_logs[c]
+            for i in range(len(log)):
+                total_latency += log[i]
+            num_req += len(log)
+
+        avg_latency = total_latency/num_req
+        return avg_latency
+
+    def writetoCSV(input, filename):
+        with open(filename, mode='a') as file:
+            writer = csv.writer(file)
+            writer.writerow(input)
+
+    def run():
+        output('---------------TestManager Run--------------')
+        #print(lines)
+        #test_and_validate()
+        ts = time.perf_counter()
+        wall_clk_time = time.time()
+
+        await(received(('start_validation')))
+        tend = time.perf_counter()
+
+        send(('send_log'), to= replicas|clients )
+        output("Sent request for Logs")
+
+        await(replica_logs_avail == True and client_logs_avail == True)
+        safety = check_correctness()
+        avg_latency = get_perf_data()
+
+        exec_time = tend - ts
+        wall_clk_time = (time.time() - wall_clk_time)*1000                  # Wall Clock time in miilli-second
+        output(safety,avg_latency, exec_time, wall_clk_time)
+        
+        writetoCSV([safety,avg_latency, exec_time, wall_clk_time], 'temp.csv')
+        send(('done'), to=parent())
+
+
+    def receive(msg=('client_log', p, logs)):
+        output("Client_log_recvd")
+        if client_logs_avail == False:
+                client_logs[p] = logs
+                if len(client_logs) >= n_clients:
+                    client_logs_avail = True
+
+    def receive(msg=('replica_log', p, logs)):
+        output("Replica_log_recvd")
+        if replica_logs_avail == False:
+            replica_logs[p] = logs
+            if len(replica_logs) > n_replicas / 2:
+                replica_logs_avail = True
