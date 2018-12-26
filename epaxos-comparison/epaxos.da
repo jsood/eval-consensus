@@ -1,0 +1,366 @@
+from collections import defaultdict
+import random
+import os
+import psutil
+# Command format - (GET/PUT, Key, Value, ClientID, QueryID)
+# Instance format - (cmd, seq, deps, status, ballot)
+
+ACTION = 0
+KEY = 1
+VALUE = 2
+CID = 3
+QID = 4
+
+CMD = 0
+SEQ = 1
+DEPS = 2
+STATUS = 3
+BALLOT = 4
+
+INDEX = 0
+LOWLINK = 1
+
+PCOUNT = 0
+ODEPS = 1
+OSEQ = 2
+RDEPS = 3
+RSEQ = 4
+ACOUNT = 5
+
+EXECUTION_SLEEP = 0.001
+EXPLICIT_WAIT_PERIOD = 3
+
+NOOP = ('PUT', 10000000, -1, -1, -1)
+
+class Replica(process):
+    """
+    Class: Replica
+
+    Replica class for Eglatarian Paxos
+
+    """
+    def setup(replicas, F, epoch, verifier):
+        """
+        Args:
+            replicas[set(ProcessId)]: set of all the replicas
+            F[set(ProcessId)] set of fast quorum replicas
+            epoch part of ballot for reconfiguration uniqueness
+            verifier correcteness tester process id
+        Returns: None
+        """
+        self.inst = -1                                                          # current maximum instance number for this replica
+        self.cmds = defaultdict(dict)                                           # cmds[Q][i] represents the command at i-th instance of replica Q
+        self.shutdown = False                                                   # whether to shutdown this replica
+        self.execinfo = defaultdict(dict)                                       # used by Tarjan's execution algo to store lowlink and index
+        self.execedUpto = {k:-1 for k in replicas}                              # all the instances of replica R till execedUpto[R] were executed
+        self.data = defaultdict()                                               # dictionary on which the clients perform read/write ops
+        self.skipfastpath = defaultdict(set)                                    # whether an instance should skip fast path (in case of explicit prepare)
+        self.probleminstance= defaultdict(lambda:-1)                            # problem instances on which the replica is waiting to be commited
+        self.timeout = defaultdict(lambda:0)                                    # maintain the timeout of the above problem instances
+        self.proc = psutil.Process(os.getpid())
+
+    def record_memory_consumed():
+        send(('memory', self, proc.memory_info()[1]/1000), to=parent())
+
+    def receive(msg= ('request', cmd)):
+        """
+        Args:
+            cmd: Command sent by the client
+        Returns: None
+        """
+        inst += 1                                                               # L1: increment instance number
+        phase1(cmd, self, inst, (epoch,0,self))                                 # start phase1, made a new function to be reused by explicit prepare
+        record_memory_consumed()
+
+    def phase1(cmd, L, i, ballot):
+        """
+        Args:
+            cmd: Command sent by the client
+            L: Leader of the command
+            i: instance for the command
+            ballot: Ballot for the instance
+        Returns: None
+        """
+        interf = setof((Q,j), Q in cmds, j in cmds[Q], cmds[Q][j][CMD][KEY] == cmd[KEY])    # L1 comment: set of interfering commands
+        seq = 1 + max(setof(cmds[Q][j][SEQ], (Q,j) in interf).union([0]))                   # L2: find a sequence number of this request
+        deps = {k:-1 for k in replicas}                                                     # L3: calculate dependecies for this command
+        for Q,j in interf: deps[Q] = max(j, deps[Q])                                        # L3: optimized according to section 4.5
+        cmds[L][i] = (cmd, seq, deps, 'pre-accepted', ballot)                               # L4: record the cmd in (L,i) as 'pre-accepted'
+        if verifier:
+            send(('request',cmd, seq, deps, (L,i), ballot, self), to=verifier)
+        send(('pre-accept', cmd, seq, deps, (L,i), ballot), to= F.difference({self}))       # L5: send pre-accept message to the quorum
+        record_memory_consumed()
+
+    def receive(msg= ('pre-accept', cmd, seq, deps, (L,i), ballot), from_= sender):
+        """
+        Args:
+            cmd: Command sent by the client
+            seq: Sequence number
+            deps: Set of dependencies
+            L: Leader of the command
+            i: instance for the command
+            ballot: Ballot for the instance
+        Returns: None
+        """
+        interf = setof((Q,j), Q in cmds, j in cmds[Q], cmds[Q][j][CMD][KEY] == cmd[KEY])    # Calculate the interfering commands, implicitly used in L7
+        seq = max(setof(1 + cmds[Q][j][SEQ], (Q,j) in interf).union([seq]))                 # L6: update seq to a value above any of the known commands
+        for Q,j in interf: deps[Q] = max(j, deps[Q])                                        # L7: update deps (includes optimization from section 4.5)
+        cmds[L][i] = (cmd, seq, deps, 'pre-accepted', ballot)                               # L8: record the cmd in (L,i) as 'pre-accepted'
+        if verifier:
+            send(('pre-accept',cmd, seq, deps, (L,i), ballot, self), to=verifier)
+        send(('pre-accept-ok', cmd, seq, deps, (L,i), ballot), to= sender)                  # L9: send 'pre-accept-ok' message to the sender
+        record_memory_consumed()
+
+    def receive(msg= ('pre-accept-ok', cmd, seq, deps, (L,i), ballot)):
+        """
+        Args:
+            cmd: Command sent by the client
+            seq: Sequence number
+            deps: Set of dependencies
+            L: Leader of the command
+            i: instance for the command
+            ballot: Ballot for the instance
+        Returns: None
+        """
+        if (cmds[L][i][STATUS] == 'pre-accepted' and                                        # Conditional statement in the 3rd part of phase1 -
+            len(setof(a, received(('pre-accept-ok', _cmd,                                   # On receiving at least N/2 pre-accept-ok messages.
+                                    _, _, (_L,_i), _ballot), from_ =a)))
+                >= len(replicas)//2):
+            deps, seq, doCommit = checkCommit(L, i, ballot)                                 # L10: check if we commit through fast path
+            if doCommit and i not in skipfastpath[L]:                                       # L10:
+                commit(cmds[L][i][CMD], seq, deps, L, i, ballot)                            # L11: start commit phase
+            else:                                                                           # L12
+                phase2(cmds[L][i][CMD], seq, deps, L, i, ballot)                            # L13: start paxos accept phase, phase 2.
+        record_memory_consumed()
+
+    def checkCommit(L, i, ballot):
+        """
+        Args:
+            L: Leader of the command
+            i: instance for the command
+            ballot: Ballot for the instance
+        Returns: None
+        """
+        rec = setof(a, received(('pre-accept-ok', _, _, _, (_L,_i), _ballot), from_ =a))    # Used for conditional check for L10
+        seq = setof(s, received(('pre-accept-ok', _, s, _, (_L,_i), _ballot)))              # Used for conditional check for L10
+        deps = setof(d, received(('pre-accept-ok', _, _, d, (_L,_i), _ballot)))             # Used for conditional check for L10
+        udeps = {k:-1 for k in replicas}                                                    # L13: Calculate union of depedencies
+        for d in deps:                                                                      # L13:
+            for k,v in d.items(): udeps[k] = max(udeps[k], v)                               # L13:
+        record_memory_consumed()
+        return udeps, max(seq), (F.difference([self]) == rec and                            # L10 check
+                                    len(seq) == 1 and len(deps) == 1)
+
+    def phase2(cmd, seq, deps, L, i, ballot):
+        """
+        Args:
+            cmd: Command sent by the client
+            seq: Sequence number
+            deps: Set of dependencies
+            L: Leader of the command
+            i: instance for the command
+            ballot: Ballot for the instance
+        Returns: None
+        """
+        cmds[L][i] = (cmd, seq, deps, 'accepted', ballot)                                   # L16: record the cmd in (L,i) as 'accepted'
+        if verifier:
+            send(('accept', cmd, seq, deps, (L,i), ballot, self), to=verifier)
+        send(('accept', cmd, seq, deps, (L,i), ballot), to= replicas.difference({self}))    # L17: Send accept to atleast N/2 replicas
+        record_memory_consumed()
+
+    def receive(msg= ('accept', cmd, seq, deps, (L,i), ballot), from_= sender):
+        """
+        Args:
+            cmd: Command sent by the client
+            seq: Sequence number
+            deps: Set of dependencies
+            L: Leader of the command
+            i : instance for the command
+            ballot: Ballot for the instance
+        Returns: None
+        """
+        cmds[L][i] = (cmd, seq, deps, 'accepted', ballot)                                   # L18: record the cmd in (L,i) as 'accepted'
+        if verifier:
+            send(('accept', cmd, seq, deps, (L,i), ballot, self), to=verifier)
+        send(('accept-ok', cmd, (L,i), ballot), to= sender)                                 # L19: send accept-ok to the sender
+        record_memory_consumed()
+
+    def receive(msg= ('accept-ok', cmd, (L,i), ballot)):
+        if (cmds[L][i][STATUS] == 'accepted' and
+            len(setof(a, received(('accept-ok', _cmd, (_L,_i), _ballot), from_ =a)))        # Conditional check of phase2, part 3
+                >= len(replicas)//2):                                                       # On receiving at least N/2 accept-ok messages
+            if verifier:
+                send(('accept-ok', cmd, (L,i), ballot, self), to=verifier)
+            commit(cmds[L][i][CMD], cmds[L][i][SEQ], cmds[L][i][DEPS], L, i, ballot)        # L20: start commit phase
+        record_memory_consumed()
+
+    def commit(cmd, seq, deps, L, i, ballot):
+        cmds[L][i] = (cmd, seq, deps, 'commited', ballot)                                   # L21: record the command at (L,i) as commited
+        if cmd[ACTION] == 'PUT': send(('commited', cmd), to= cmd[CID])                      # L22: send commit notification to client
+        if verifier:
+            send(('commit', cmd, seq, deps, (L,i), ballot, self), to=verifier)
+        send(('commit', cmd, seq, deps, (L,i), ballot), to= replicas.difference({self}))    # L23: send commit to all other replicas
+        record_memory_consumed()
+
+    def receive(msg= ('commit', cmd, seq, deps, (L,i), ballot)):
+        """
+        Args:
+            cmd: Command sent by the client
+            seq: Sequence number
+            deps: Set of dependencies
+            L: Leader of the command
+            i : instance for the command
+        Returns: None
+        """
+        cmds[L][i] = (cmd, seq, deps, 'commited', ballot)                                   # L24: record the command at (L,i) as commited
+        if verifier:
+            send(('commit', cmd, seq, deps, (L,i), ballot, self), to=verifier)
+        record_memory_consumed()
+
+    def explicitPrepare(L,i):
+        if i not in cmds[L]:                                                                # L25: increment the max know ballot number
+            ballot = (epoch, 1, self)                                                       # L25:
+        else:                                                                               # L25:
+            ballot = (epoch, 1 + cmds[L][i][BALLOT][1], self)                               # L25:
+        send(('prepare', ballot, (L,i)), to=replicas)                                       # L26: send prepare to at least N/2 replicas and
+        await(len(setof(a, received(('prepare-ok', _, _, (_L,_i), _ballot), from_ =a)).union(
+            setof(a, received(('NACK', (_L,_i), _ballot), from_ =a)))) >= len(replicas)//2 + 1) # L26: wait for at least N/2 replies
+        R = setof((cmdi,b,a), received(('prepare-ok', cmdi, b, (_L,_i), _ballot), from_ =a))# L27: R be the replies with the highest ballot
+        if some(((cmd, seq, deps, 'commited', _), _, _) in R):                              # L28: if R has a commited command
+            commit(cmd, seq, deps, L, i, ballot)                                            # L29: run commit phase
+        elif some(((cmd, seq, deps, 'accepted', _), _, _) in R):                            # L30: if R has an accepted command
+            phase2(cmd, seq, deps, L, i, ballot)                                            # L31: run paxos-accept phase, phase2
+        elif some(((cmd, seq, deps, 'pre-accepted', b), (_epoch,0,_L), _) in R,             # L32: if R contains at least N/2 identical pre-accept command
+                    has= len(setof(a,  ((cmd, seq, deps, 'pre-accepted', _), (_epoch,0,_L), a) in R).difference([L]))
+                            >= len(replicas)//2):
+            phase2(cmd, seq, deps, L, i, ballot)                                            # L33: start phase2
+        elif some(((cmd, seq, deps, 'pre-accepted', _), _, _) in R):                        # L34: if R contains at least one pre-accept command
+            skipfastpath[L].add(i)                                                          # L35: start phase1 and skip fast path
+            phase1(cmd, L, i, ballot)                                                       # L35:
+        else:                                                                               # L36: else
+            skipfastpath[L].add(i)                                                          # L37: start phase1 with no-op and skip fast path
+            phase1(NOOP, L, i, ballot)                                                      # L37:
+        record_memory_consumed()
+
+    def receive(msg=('prepare', ballot, (L,i)), from_ =sender):
+        if i in cmds[L] and ballot > cmds[L][i][BALLOT]:                                    # L38: if received ballot is larger the most recent ballot
+            send(('prepare-ok', cmds[L][i], cmds[L][i][BALLOT], (L,i), ballot), to=sender)  # L39: send prepare-ok message to the sender
+        else:                                                                               # L40: else
+            send(('NACK', (L,i), ballot), to= sender)                                       # L41: send NACK
+        record_memory_consumed()
+
+    def run():
+        """
+        Args:
+        Returns: None
+        """
+        # Used the code from https://github.com/efficient/epaxos/blob/master/src/epaxos/epaxos.go
+        while not shutdown:
+            executed = False
+            -- e1
+            for rep in replicas:
+                -- e2
+                maxInst = max(setof(v, v in cmds[rep]).union([-1]))
+                for ins in range(execedUpto[rep]+1, maxInst+1):
+                    if ins in cmds[rep] and cmds[rep][ins][STATUS] == 'executed':   # if the cmd is already executed, continue
+                        if ins == execedUpto[rep] + 1:
+                            execedUpto[rep] = ins
+                        continue
+
+                    # Execution Algo: 1. Wait for R.i to commited or run explicit prepare
+                    if ins not in cmds[rep] or cmds[rep][ins][STATUS] != 'commited':
+                        if ins == probleminstance[rep]:
+                            timeout[rep] += EXECUTION_SLEEP
+                            if timeout[rep] >= EXPLICIT_WAIT_PERIOD:
+                                explicitPrepare(rep, ins)
+                                timeout[rep] = 0
+                        else:
+                            probleminstance[rep] = ins
+                            timeout[rep] = 0
+
+                        if ins not in cmds[rep]:
+                            continue
+                        break
+
+                    # Now that we know the command is commited, execute the command.
+                    if executeCommand(rep, ins):
+                        executed = True
+                        if execedUpto[rep] + 1 == ins:
+                            execedUpto[rep] = ins
+
+            if not executed:
+                if await(False): pass
+                elif timeout(EXECUTION_SLEEP): pass
+
+    def receive(msg= ('shutdown',)):
+        #output(data)
+        shutdown = True
+
+    # Source: https://github.com/efficient/epaxos/blob/master/src/epaxos/epaxos-exec.go
+    # 4.3.2 Execution algorithm
+    def executeCommand(R, i):
+        if i not in cmds[R]: return False
+        if cmds[R][i][STATUS] == 'executed': return True
+        if cmds[R][i][STATUS] != 'commited': return False
+        # Find the strongly connected components using Tarjan's algorithm
+        if not findSCC(R, i): return False
+        return True
+
+    def findSCC(R, i):
+        stack = list()
+        id = [1] # Start ID. It's in a list because we want to pass reference
+        return strongConnect(R, i, id, stack)
+
+    def strongConnect(R, i, id, stack):
+        if i not in execinfo[R]:
+            execinfo[R][i] = [0, 0]
+        execinfo[R][i][INDEX] = execinfo[R][i][LOWLINK] = id[0]
+        id[0] += 1
+
+        l = len(stack)
+        stack.append((R,i))
+
+        for replica in replicas:
+            d = cmds[R][i][DEPS][replica]
+            for x in range(execedUpto[replica]+1 ,d+1):  # Add lastExeced optimization
+                await(x in cmds[replica])
+                if cmds[replica][x][STATUS] == 'executed': continue # Ignore if the cmd was executed
+                await(cmds[replica][x][STATUS] == 'commited')
+
+                if x not in execinfo[replica]:
+                    execinfo[replica][x] = [0, 0]
+                if execinfo[replica][x][INDEX] == 0:
+                    if not strongConnect(replica, x, id, stack):
+                        while len(stack) > l:
+                            rep,ins = stack.pop()
+                            execinfo[rep][ins][INDEX] = 0
+                        return False
+
+                    execinfo[R][i][LOWLINK] = min(execinfo[R][i][LOWLINK], execinfo[replica][x][LOWLINK])
+                else:
+                    execinfo[R][i][LOWLINK] = min(execinfo[R][i][LOWLINK], execinfo[replica][x][INDEX])
+
+        # Found SCC
+        if execinfo[R][i][LOWLINK] == execinfo[R][i][INDEX]:
+            # Inverse topological sort
+            lst = stack[l:len(stack)]
+            lst.sort(key=seqCmp)
+            for rep, ins in lst:
+                cmds[rep][ins] = (cmds[rep][ins][0], cmds[rep][ins][1], cmds[rep][ins][2], 'executed', cmds[rep][ins][4])
+                if verifier:
+                    send(('executed',cmds[rep][ins][CMD],(rep,ins),self), to=verifier)
+                cmd = cmds[rep][ins][CMD]
+                if cmd[ACTION] == 'PUT':
+                    data[cmd[KEY]] = cmd[VALUE]
+                if rep == self:
+                    if cmd[ACTION] == 'GET': send(('executed', cmd, cmd[VALUE]), to= cmd[CID])
+            while len(stack) > l: stack.pop()
+
+        return True
+
+    def seqCmp(x):
+        return (cmds[x[0]][x[1]][SEQ], x[0], x[1])
+        #return cmds[x[0]][x[1]][SEQ]
+
+# Implementation of the algorithm in 'There Is More Consensus in Egalitarian Parliaments' by
+# Iulian Moraru, David G. Andersen and Michael Kaminsky.

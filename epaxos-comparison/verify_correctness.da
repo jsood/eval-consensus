@@ -1,0 +1,222 @@
+from collections import defaultdict
+
+KEY = 1
+VALUE = 2
+CID = 3
+QID = 4
+
+CMD = 0
+SEQ = 1
+DEPS = 2
+STATUS = 3
+BALLOT = 4
+
+INDEX = 0
+LOWLINK = 1
+
+
+#Eventlog=(OrderId,EventType,ReplicaId,InstanceId,Cmd)
+
+#EventType
+PROPOSAL = 'proposal'
+COMMITTED = 'committed'
+EXECUTED = 'executed'
+
+class correctnessverifier(process):
+	"""
+	Class: CorrectnessVerifier
+	
+	Program to verfy the correctness for Eglatarian Paxos
+
+	"""
+	def addtoeventlog(t,replica,inst,cmd):
+		eventnum = eventnum + 1
+		eventlog.append((eventnum,t,replica,inst,cmd))
+
+	def setup(replicas):
+		self.comdlog = defaultdict(lambda: defaultdict(dict))
+		self.proposed = defaultdict()
+		self.executed = {}
+		self.crtInst = {}
+		self.committed = defaultdict()
+		self.committed_count = 0
+		self.proposed_count = 0
+		self.done = False
+		self.eventlog = []
+		self.eventnum = 0
+		self.execution_count = 0;
+
+	def receive(msg= ('request', cmd,seq,deps, (L,i),ballot,replica)):
+		"""
+		Args:
+			cmd: The command tuple with format (GET/PUT, Key, Value, ClientID, QueryID) 
+			seq: The sequence number for the command as determined by the command leader
+			deps: The dependency list for the command
+			(L,i): The command leader L and the instance Id 
+			ballot: Ballot number
+			replica: The replica object from which the message is being sent
+		Returns: None
+		"""
+
+		addtoeventlog(PROPOSAL,replica,i,cmd)
+		proposed_count = proposed_count + 1
+		proposed[cmd] = (cmd,proposed_count)
+		comdlog[replica][L][i] = (cmd, seq, deps, 'pre_accepted', ballot)
+		
+		
+		
+	def receive(msg= ('pre-accept',cmd,seq,deps,(L,i),ballot,replica)):
+		
+		comdlog[replica][L][i] = (cmd, seq, deps, 'pre_accepted', ballot)	
+		
+		"""
+		Args:
+			cmd: The command tuple with format (GET/PUT, Key, Value, ClientID, QueryID) 
+			seq: The sequence number for the command as determined by the command leader
+			deps: The dependency list for the command
+			(L,i): The command leader L and the instance Id 
+			ballot: Ballot number
+			replica: The replica object from which the message is being sent
+		Returns: None
+		"""
+			
+	def receive(msg= ('pre-accept-ok',cmd,seq,deps,(L,i),ballot,replica)):
+		if replica in comdlog and L in comdlog[L] and i in comdlog[replica][L] and comdlog[replica][L][i][STATUS] != 'pre_accepted':
+			output('Stability Guarantee Failed at pre-accept-ok \n\n\n\n\n')
+		else:
+			comdlog[replica][L][i] = (cmd, seq, deps, 'pre-accepted', ballot)
+		"""
+		Args:
+			cmd: The command tuple with format (GET/PUT, Key, Value, ClientID, QueryID) 
+			seq: The sequence number for the command as determined by the command leader
+			deps: The dependency list for the command
+			(L,i): The command leader L and the instance Id 
+			ballot: Ballot number
+			replica: The replica object from which the message is being sent
+		Returns: None
+		"""
+	
+	def receive(msg= ('commit',cmd,seq,deps,(L,i),ballot,replica)):
+		
+		"""
+		Args:
+			cmd: The command tuple with format (GET/PUT, Key, Value, ClientID, QueryID) 
+			seq: The sequence number for the command as determined by the command leader
+			deps: The dependency list for the command
+			(L,i): The command leader L and the instance Id 
+			ballot: Ballot number
+			replica: The replica object from which the message is being sent
+		Returns: None
+		"""
+
+		"""
+			Non-Triviality Test:
+				Every committed command must have been proposed by a client 
+		"""
+		if cmd not in proposed:
+			output("Non-triviality test failed \n\n\n\n\n")
+
+		"""
+			Consistency Test:
+				A command leader L should have committed only one command for a given instance
+		"""
+		if L in cmd and i in comdlog[replica][L]:
+			output("Consistency test failed \n\n\n\n\n")
+
+		else:
+			if replica in comdlog and L in comdlog[replica] and i in comdlog[replica][L] and (comdlog[replica][L][i][STATUS] == 'pre_accepted' or comdlog[replica][L][i][STATUS] == 'accepted'):
+				committed_count = committed_count + 1
+				addtoeventlog(COMMITTED,replica,i,cmd)
+				comdlog[replica][L][i] = (cmd, seq, deps, 'committed', ballot)
+				#send(('commit-reply',L,i,replica),to= replica)
+			else:
+				output("Stability test failed while committing")#,comdlog[replica][L],"\n\n\n\n\n")
+		
+		
+		
+	
+	def receive(msg= ('accept',cmd,seq,deps,(L,i),ballot,replica)):
+
+		if replica in comdlog and L in comdlog[replica] and i in comdlog[replica][L] and comdlog[replica][L][i][STATUS] == 'pre-accept':   #Correct ???
+			output('Stability Guarantee Failed At accept failed \n\n\n\n\n')
+		else:
+			comdlog[replica][L][i] = (cmd, seq, deps, 'accepted', ballot)
+		
+		"""
+		Args:
+			cmd: The command tuple with format (GET/PUT, Key, Value, ClientID, QueryID) 
+			seq: The sequence number for the command as determined by the command leader
+			deps: The dependency list for the command
+			(L,i): The command leader L and the instance Id 
+			ballot: Ballot number
+			replica: The replica object from which the message is being sent
+		Returns: None
+		"""
+		
+	
+	def receive(msg= ('accept-ok',cmd,(L,i),ballot,replica)):
+
+		if replica in comdlog and L in comdlog[replica] and i in comdlog[replica][L] and comdlog[replica][L][i][STATUS] == 'accepted':
+			comdlog[replica][L][i] = (comdlog[replica][L][i][0],comdlog[replica][L][i][1],comdlog[replica][L][i][2],'accepted',comdlog[replica][L][i][4])
+		else:
+			output('Stability Guarantee Failed at accept-ok \n\n\n\n\n')
+		
+		"""
+		Args:
+			cmd: The command tuple with format (GET/PUT, Key, Value, ClientID, QueryID) 
+			(L,i): The command leader L and the instance Id 
+			replica: The replica object from which the message is being sent
+		Returns: None
+		"""
+	
+	def receive(msg = ('executed',cmd,(L,inst),replica)):
+		"""
+		Args:
+			cmd: The command tuple with format (GET/PUT, Key, Value, ClientID, QueryID) 
+			(L,inst): The command leader L and the instance Id 
+			replica: The replica object from which the message is being sent
+		Returns: None
+		"""
+
+		if comdlog[replica][L][inst][STATUS] == 'committed':
+			addtoeventlog(EXECUTED,replica,inst,cmd)
+			execution_count = execution_count + 1
+
+		else:
+			 print('Stability Guarantee Failed',comdlog[replica][L][inst][STATUS], '\n\n\n\n\n')
+	
+	def receive(msg= ('shutdown',)):
+		output("Number of proposals",proposed_count)
+		output("Number of committed messages",committed_count)
+		output("Number of command executions",execution_count)
+		done = True
+
+	
+	def run():
+		await(done)
+		
+		'''
+			Execution Consistency Check:
+				Two commands A and B if executed in the order (A,B) should have the same order (A,B) in all other replicas
+
+		'''
+		execution_1 = setof((cmd1, cmd2), (o1, _EXECUTED, r, i1, cmd1) in eventlog, (o2, _EXECUTED, r, i2, cmd2) in eventlog, cmd1[KEY] == cmd2[KEY] and o1 < o2)
+		execution_2 = setof((cmd1, cmd2), (o1, _EXECUTED, r, i1, cmd1) in eventlog, (o2, _EXECUTED, r, i2, cmd2) in eventlog, cmd1[KEY] == cmd2[KEY] and o1 > o2)
+
+		if (execution_1.intersection(execution_2)):
+			output("Execution Consistency Failed")
+
+		'''
+			Condtition to check for execution linearizability
+				If two commands ‘a’ and ‘b’ are serialized by clients, then every replica will execute ‘a’ before ‘b’
+				i.e If a client committs a message 'b' only after a command 'a' is committed, then execution of the command 'a' should be finished in the all other
+					 replicas before command 'b' executes in any of the replicas.
+
+		'''
+
+		cmd_linear_set =  setof((cmd1, cmd2), (o1, _PROPOSAL, r1, i1, cmd1) in eventlog, (o2, _COMMITTED, r2, i2, cmd2) in eventlog, cmd1[KEY] == cmd2[KEY] and o1 > o2)
+
+		count = len(cmd_linear_set)
+		for (cmd1, cmd2) in cmd_linear_set:
+			if setof(r, (o1, _EXECUTED, r, i1, _cmd1) in eventlog, (o2, _EXECUTED, r, i2, _cmd2) in eventlog, o2 < o1) != replicas:
+				output("Execution linearizability failed")

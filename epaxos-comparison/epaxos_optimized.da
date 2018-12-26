@@ -1,0 +1,306 @@
+from collections import defaultdict
+import random
+import copy
+import os
+import psutil
+
+# Command format - (GET/PUT, Key, Value, ClientID, QueryID)
+# Instance format - (cmd, seq, deps, status, ballot)
+# Instance data - [preacceptok_count, orig_deps, orig_seq, reply_deps, reply_seq, acceptok_count]
+
+ACTION = 0
+KEY = 1
+VALUE = 2
+CID = 3
+QID = 4
+
+CMD = 0
+SEQ = 1
+DEPS = 2
+STATUS = 3
+BALLOT = 4
+
+INDEX = 0
+LOWLINK = 1
+
+PCOUNT = 0
+ODEPS = 1
+OSEQ = 2
+RDEPS = 3
+RSEQ = 4
+ACOUNT = 5
+
+EXECUTION_SLEEP = 0.001
+
+#NOOP = ('PUT', 10000000, -1, -1, -1)
+
+class Replica(process):
+    """
+    Class: Replica
+
+    Replica class for Eglatarian Paxos
+
+    """
+    def setup(replicas, F, epoch,verifier):
+        """
+        Args:
+            replicas[set(ProcessId)] set of all the replicas
+            F[set(ProcessId)] set of fast quorum replicas
+        Returns: None
+        """
+        self.inst = -1
+        self.cmds = defaultdict(dict)
+        self.shutdown = False
+        self.execinfo = defaultdict(dict)
+        self.execedUpto = {k:-1 for k in replicas}
+        self.data = defaultdict()
+        self.maxSeqPerKey = defaultdict(lambda:-1)
+        self.conflicts = defaultdict(lambda:defaultdict(lambda:-1))
+        self.instdata = defaultdict(dict)
+        self.proc = psutil.Process(os.getpid())
+
+    def record_memory_consumed():
+        send(('memory', self, proc.memory_info()[1]/1000), to=parent())
+
+    def receive(msg= ('request', cmd)):
+        """
+        Args:
+            cmd: Command sent by the client
+        Returns: None
+        """
+        inst += 1
+        seq = 1 + max(maxSeqPerKey[cmd[KEY]], 0)
+        maxSeqPerKey[cmd[KEY]] = max(maxSeqPerKey[cmd[KEY]], seq)
+        deps = {k:conflicts[k][cmd[KEY]] for k in replicas}
+        conflicts[self][cmd[KEY]] = inst
+        cmds[self][inst] = (cmd, seq, deps, 'pre-accepted', (epoch,0,self))
+        if verifier:
+            send(('request',cmd,seq,deps,(self,inst),0,self), to=verifier)
+        instdata[self][inst] = [0, deps, seq, copy.deepcopy(deps), seq, 0]
+        send(('pre-accept', cmd, seq, deps, (self,inst), cmds[self][inst][BALLOT]), to= F.difference({self}))
+        record_memory_consumed()
+
+    def receive(msg= ('pre-accept', cmd, seq, deps, (L,i), ballot)):
+        """
+        Args:
+            cmd: Command sent by the client
+            seq: Sequence number
+            deps: Set of dependencies
+            L: Leader of the command
+            i: instance for the command
+            ballot: Ballot for the instance
+        Returns: None
+        """
+        #output('pre-accept', cmd, seq, deps, L, i, ballot)
+        #output('cmds', cmds)
+        #output(interf)
+        seq = max(1 + maxSeqPerKey[cmd[KEY]], seq)
+        maxSeqPerKey[cmd[KEY]] = max(maxSeqPerKey[cmd[KEY]], seq)
+        for r in replicas: deps[r] = max(conflicts[r][cmd[KEY]], deps[r])
+        conflicts[L][cmd[KEY]] = max(conflicts[L][cmd[KEY]], i)
+        cmds[L][i] = (cmd, seq, deps, 'pre-accepted', ballot)
+        if verifier:
+            send(('pre-accept',cmd,seq,deps,(L,i),ballot,self), to=verifier)
+        send(('pre-accept-ok', cmd, seq, deps, (L,i), ballot), to= L)
+        record_memory_consumed()
+
+    def receive(msg= ('pre-accept-ok', cmd, seq, deps, (self,i), ballot)):
+        instdata[self][i][PCOUNT] += 1
+        for rep in replicas:
+            instdata[self][i][RDEPS][rep] = max(deps[rep], instdata[self][i][RDEPS][rep])
+        instdata[self][i][RSEQ] = max(instdata[self][i][RSEQ], seq)
+        if (cmds[self][i][STATUS] == 'pre-accepted' and
+            instdata[self][i][PCOUNT] >= len(replicas) - 1):
+            #deps, seq, doCommit = checkCommit(i)
+            #output('Await part 1')
+            #output('preaccept', instdata[self][i][RDEPS], instdata[self][i][ODEPS])
+            #output('preaccept', instdata[self][i][OSEQ], instdata[self][i][RSEQ])
+            if (instdata[self][i][RDEPS] == instdata[self][i][ODEPS] and
+                instdata[self][i][OSEQ] == instdata[self][i][RSEQ]):
+                #output('commiting fast')
+                commit(cmds[self][i][CMD], seq, deps, self, i, cmds[self][i][BALLOT])
+            else:
+                phase2(cmds[self][i][CMD], instdata[self][i][RSEQ], instdata[self][i][RDEPS], self, i, cmds[self][i][BALLOT])
+        record_memory_consumed()
+
+    def receive(msg= ('accept', cmd, seq, deps, (L,i), ballot)):
+        """
+        Args:
+            cmd: Command sent by the client
+            seq: Sequence number
+            deps: Set of dependencies
+            L: Leader of the command
+            i : instance for the command
+            ballot: Ballot for the instance
+        Returns: None
+        """
+        cmds[L][i] = (cmd, seq, deps, 'accepted', ballot)
+        maxSeqPerKey[cmd[KEY]] = max(maxSeqPerKey[cmd[KEY]], seq)
+        conflicts[L][cmd[KEY]] = max(conflicts[L][cmd[KEY]], i)
+        #output('sending accept-ok messages')
+        if verifier:
+            send(('accept',cmd,seq,deps,(L,i),ballot,self), to=verifier)
+        send(('accept-ok', cmd, (L,i), ballot), to= L)
+        record_memory_consumed()
+
+    def receive(msg= ('accept-ok', cmd, (self,i), ballot)):
+        instdata[self][i][ACOUNT] += 1
+        if (cmds[self][i][STATUS] == 'accepted' and
+            instdata[self][i][ACOUNT] >= len(replicas)//2):
+            if verifier:
+                send(('accept-ok',cmd,(self,i),ballot,self), to=verifier)
+            commit(cmds[self][i][CMD], cmds[self][i][SEQ], cmds[self][i][DEPS], self, i, cmds[self][i][BALLOT])
+        record_memory_consumed()
+
+    def receive(msg= ('commit', cmd, seq, deps, (L,i), ballot)):
+        """
+        Args:
+            cmd: Command sent by the client
+            seq: Sequence number
+            deps: Set of dependencies
+            L: Leader of the command
+            i : instance for the command
+        Returns: None
+        """
+        #output('commited', cmd)
+        cmds[L][i] = (cmd, seq, deps, 'commited', ballot)
+        conflicts[L][cmd[KEY]] = max(conflicts[L][cmd[KEY]], i)
+        if verifier:
+            send(('commit',cmd,seq,deps,(L,i),ballot,self), to=verifier)
+        record_memory_consumed()
+        #await(received(('commit-reply',L,i,self),from_ = verifier))
+
+    def commit(cmd, seq, deps, L, i, ballot):
+        cmds[L][i] = (cmd, seq, deps, 'commited', ballot)
+        maxSeqPerKey[cmd[KEY]] = max(maxSeqPerKey[cmd[KEY]], seq)
+        if cmd[ACTION] == 'PUT': send(('commited', cmd), to= cmd[CID])
+        if verifier:
+            send(('commit',cmd,seq,deps,(L,i),ballot,self), to=verifier)
+        send(('commit', cmd, seq, deps, (L,i), ballot), to= replicas.difference({self}))
+        record_memory_consumed()
+
+    def phase2(cmd, seq, deps, L, i, ballot):
+        cmds[L][i] = (cmd, seq, deps, 'accepted', ballot)
+        maxSeqPerKey[cmd[KEY]] = max(maxSeqPerKey[cmd[KEY]], seq)
+        if verifier:
+            send(('accept',cmd,seq,deps,(L,i),ballot,self), to=verifier)
+        send(('accept', cmd, seq, deps, (L,i), ballot), to= replicas.difference({self}))
+        record_memory_consumed()
+
+    def run():
+        """
+        Args:
+        Returns: None
+        """
+        # Used the code from https://github.com/efficient/epaxos/blob/master/src/epaxos/epaxos.go
+        while not shutdown:
+            executed = False
+            -- e1
+            for rep in replicas:
+                -- e2
+                ins = execedUpto[rep]
+                while True:
+                    ins += 1
+                    if ins in cmds[rep] and cmds[rep][ins][STATUS] == 'executed':
+                        if ins == execedUpto[rep] + 1:
+                            execedUpto[rep] = ins
+                        continue
+
+                    if ins not in cmds[rep] or cmds[rep][ins][STATUS] != 'commited':
+                        break
+
+                    if executeCommand(rep, ins):
+                        executed = True
+                        if execedUpto[rep] + 1 == ins:
+                            execedUpto[rep] = ins
+
+            if not executed:
+                if await(False): pass
+                elif timeout(EXECUTION_SLEEP): pass
+
+    def receive(msg=('prepare', ballot, (L,i))):
+        if i in cmds[L] and ballot > cmds[L][i][BALLOT]:
+            send(('prepare-ok', cmds[L][i], cmds[L][i][BALLOT], (L,i), ballot), to=ballot[2])
+        else:
+            send(('NACK', (L,i), ballot), to= ballot[2])
+        record_memory_consumed()
+
+    def receive(msg= ('shutdown',)):
+        #output(data)
+        #pinfo()
+        record_memory_consumed()
+        shutdown = True
+
+    # Source: https://github.com/efficient/epaxos/blob/master/src/epaxos/epaxos-exec.go
+    def executeCommand(R, i):
+        #output('executing a command', R, i)
+        if i not in cmds[R]: return False
+        if cmds[R][i][STATUS] == 'executed': return True
+        if cmds[R][i][STATUS] != 'commited': return False
+        if not findSCC(R, i): return False
+        record_memory_consumed()
+        return True
+
+    def findSCC(R, i):
+        stack = list()
+        id = [1] # Start ID. It's in a list because we want to pass reference
+        record_memory_consumed()
+        return strongConnect(R, i, id, stack)
+
+    def strongConnect(R, i, id, stack):
+        if i not in execinfo[R]: execinfo[R][i] = [0, 0]
+        execinfo[R][i][INDEX] = execinfo[R][i][LOWLINK] = id[0]
+        id[0] += 1
+
+        l = len(stack)
+        stack.append((R,i))
+
+        for replica in replicas:
+            d = cmds[R][i][DEPS][replica]
+            for x in range(execedUpto[replica]+1 ,d+1):
+                await(x in cmds[replica])
+                if cmds[replica][x][STATUS] == 'executed': continue # Ignore if the cmd was executed
+                await(cmds[replica][x][STATUS] == 'commited')
+
+                if x not in execinfo[replica]: execinfo[replica][x] = [0, 0]
+                if execinfo[replica][x][INDEX] == 0:
+                    if not strongConnect(replica, x, id, stack):
+                        while len(stack) > l:
+                            rep,ins = stack.pop()
+                            execinfo[rep][ins][INDEX] = 0
+                        return False
+
+                    execinfo[R][i][LOWLINK] = min(execinfo[R][i][LOWLINK], execinfo[replica][x][LOWLINK])
+                else:
+                    execinfo[R][i][LOWLINK] = min(execinfo[R][i][LOWLINK], execinfo[replica][x][INDEX])
+
+        # Found SCC
+        if execinfo[R][i][LOWLINK] == execinfo[R][i][INDEX]:
+            lst = stack[l:len(stack)]
+            lst.sort(key=seqCmp)
+            for rep, ins in lst:
+                cmds[rep][ins] = (cmds[rep][ins][0], cmds[rep][ins][1], cmds[rep][ins][2], 'executed', cmds[rep][ins][4])
+                if verifier:
+                    send(('executed',cmds[rep][ins][CMD],(rep,ins),self), to=verifier)
+                cmd = cmds[rep][ins][CMD]
+                #output('executed', cmd)
+                if cmd[ACTION] == 'PUT': data[cmd[KEY]] = cmd[VALUE]
+                #pinfo()
+                #output('EXECUTING', cmd)
+                if rep == self:
+                    if cmd[ACTION] == 'GET': send(('executed', cmd, cmd[VALUE]), to= cmd[CID])
+                #output(data)
+            while len(stack) > l: stack.pop()
+        record_memory_consumed()
+        return True
+
+    def seqCmp(x):
+        record_memory_consumed()
+        return (cmds[x[0]][x[1]][SEQ], x[0], x[1])
+        #return cmds[x[0]][x[1]][SEQ]
+
+    def pinfo():
+        output(sorted(list(setof((k,cmds[k][v][SEQ]), k in cmds, v in cmds[k]))))
+
+# Implementation of the algorithm in 'There Is More Consensus in Egalitarian Parliaments' by
+# Iulian Moraru, David G. Andersen and Michael Kaminsky. This algorithm doesn't have explicitPrepare coded.
