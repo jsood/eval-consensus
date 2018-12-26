@@ -1,0 +1,894 @@
+import sys
+import random
+import time
+import copy
+
+# Enums for roles:
+class Role: pass
+class Follower(Role): pass
+class Candidate(Role): pass
+class Leader(Role): pass
+
+# The sections denoted in comments/docstrings are from Diego Ongaro's thesis dissertation.
+class LogEntry:
+    """Fictional log entries."""
+    def __init__(self, logType, index, term, client, command, key, value, peerList):
+        self.logType = logType
+        self.index = index
+        self.term = term
+        self.client = client
+        self.command = command
+        self.key = key
+        self.value = value
+        self.peerList = peerList
+
+    def __str__(self):
+        sl = ['LogEntry', str(self.logType), str(self.index), str(self.term), str(self.client), str(self.command), str(self.key), str(self.value), str(self.peerList)]
+        return ':'.join(sl)
+
+class Snapshot(process):
+    '''
+    - initialized by each server process
+    - invokes a paralelly running sub-process at each server
+    - the sub process takes care of snapshots creation and management
+    - runs parallel so as to affect clock the main server process
+    '''
+
+    def setup():
+        self.prevSnapshotIndex = 0
+        self.logThreshold = 4
+        self.snapshots = []
+    
+    def run():
+        #output("PARENT", parent())
+        while(True):
+            if await(some(received(('log_commitedIndex', commitIndex, log)), has= (commitIndex - prevSnapshotIndex  >= logThreshold))):
+                takeSnapshot(log, commitIndex)
+            elif some(received(('snap_exit'))):
+                break
+
+    def takeSnapshot(log, commitIndex):
+        '''
+        take_snapshot() ->  string, error
+        Take_snapshot triggers the action of taking a new snapshot. 
+        Returns the ID of the new snapshot, along with an error if any
+        '''
+
+         # Test for correctness: Snapshot data is always exclusive to each other - No replication
+        if prevSnapshotIndex <= commitIndex:
+            output("CORRECTNESS PASS: Snapshot data is always exclusive to each other - No replication")
+        else:
+            output("CORRECTNESS FAIL: Snapshot data is always exclusive to each other - No replication")
+
+        
+
+        compacted = {}  
+        count = 0
+        uncommited = []
+
+        new_snaps = []
+        for l in range(prevSnapshotIndex, commitIndex + 1):
+            compacted[log[l].key] = log[l].value
+
+        new_snaps.append(LogEntry(logType='SNAPSHOT', index=commitIndex, key=None, value=compacted, term=0, client=None, command=None, peerList=set()))
+        #compacted new log with snapshots
+        merged = snapshots + new_snaps 
+        
+        #notify the server of the new compacted log
+        send(('snapshot_update', commitIndex, merged), to=parent())
+
+        #if server does not acknowledge snapshot, ignore the snapshot else update prevSnapshotIndex 
+        if await(some(received(('snapshot_update', ci)), has= (ci == commitIndex))):
+            prevSnapshotIndex = ci
+            snapshots = merged
+            #output("INITIAL LOG: ", log)
+            #output("COMPACTED LOG: ", (snapshots))
+        elif timeout(10):
+            output("COMPACION FAILED DUE TO TIMEOUT")
+            pass
+
+
+     
+
+class Server(process):
+    def setup(peers, clients, maxTimeout, isPartOfNewConfig):
+        self.currentRole = Follower # Tracks server state
+        # Persistent states:
+        self.currentTerm = 0
+        self.currentIndex = 0
+        self.votedFor = None
+        self.log = [LogEntry(logType='LOG', index=0, key=None, value=None, term=0, client=None, command=None, peerList=set())]
+        # Volatile states:
+        self.commitIndex = 0
+        self.prevSnapshotIndex = 0
+        self.lastApplied = 0
+        self.logThreshold = 2
+        # Leader states:
+        self.nextIndex = dict((p, 1) for p in peers)
+        self.matchIndex = dict((p, 0) for p in peers)
+        # True if the leader needs to broadcast a heartbeat
+        self.has_idled = False  
+        # no_op_state => -1: Default state, 0: no_op entry is added to the log by Leader, 1: no_op entry is now committed
+        self.no_op_state = -1
+        # This stores the index of the log entry at which the no_op entry is inserted by the Leader
+        self.no_op_index = 0
+        # This stores a key value pair of the Client and the latest 'ReadRequest' by that Client. At any point of time, there can only be one Read request by one Client.
+        self.latestClientReadRequest = {}
+        # Flag to indicate if there are any unserved Read requests
+        self.read_requested = False
+        # Flag to indicate if the Leader is currently accepting requests
+        self.accepting_requests = True
+        # This stores the index of the log entry at which the reconfig entry is inserted by the Leader
+        self.reconfigurationIndex = -1
+        # reconfigurationState => -1: Default state, 0: Reconfiguration Initiated, 1: Denotes server addition, 2: Denotes server removal
+        self.reconfigurationState = -1
+        # Store the server that needs to be added. Used only during add reconfiguration
+        self.newServer = None
+        # Store the server that needs to be removed. Used only during remove reconfiguration
+        self.serverToRemove = None
+        # To keep a track of the number of rounds of replication for newly added server
+        self.logAppendRound = 0
+        # Note the time for round 2 of new server log replication
+        self.startTime = None
+        # If Leader is to be removed as part of the reconfig, this will be the new leader candidate
+        self.target_server = None
+        # Choose randomized timeout value
+        self.termTimeout = random.randint(int(maxTimeout/2), maxTimeout) / 1000
+        # Shortcut for informing clients
+        self.last_seen_leader = None
+        self._dispatch_table = {Follower  : self.follower_term,
+                                Candidate : self.candidate_term,
+                                Leader    : self.leader_term}
+        # Stores pid for Reconfig Server
+        self.addMonitor = None
+        self.snapshots = None
+        self.savedCommits = {}
+
+
+    def run():
+
+        snapshots = new(Snapshot, num=1)
+        setup(snapshots,())
+        #time.sleep(5)
+        start(snapshots)
+
+        while True:
+            if commitIndex > lastApplied:
+                lastApplied += 1
+                commit_to_state_machine()
+
+            # Choose randomized timeout value for this term:
+            #termTimeout = random.randint(int(maxTimeout/2), maxTimeout) / 1000
+
+            # Dispatch based on current server role:
+            _dispatch_table[currentRole]()
+
+    def follower_term():
+        if await(some(received(('AppendEntries', term, _, _, _, _, _, _)),
+                      has= term >= currentTerm)):
+            reset("Received")
+        elif timeout(termTimeout):
+            if isPartOfNewConfig:                                                       # Make this true for the new server that got added
+                output("Heartbeat timeout, transitioning to Candidate state.")
+                currentRole = Candidate
+            """
+            else:
+                output("########### No Heartbeat timeout since this is a new Server.")
+            """
+
+    def candidate_term():
+        --start_election
+        currentTerm += 1
+        RequestVoteRPC(target=peers,
+                       term=currentTerm,
+                       candidateId=self,
+                       lastLogIndex=len(log)-1,
+                       lastLogTerm=log[-1].term)
+        if await(len(setof(p, received(('RequestVoteReply', _currentTerm, True),
+                                       from_=p))) > len(peers)/2):
+            output("Transitioning to Leader.")
+            currentRole = Leader
+            # Reinitialize volatile Leader states:
+            nextIndex = dict((p, len(log)) for p in peers)
+            matchIndex = dict((p, 0) for p in peers)
+            has_idled = True    # Force initial heartbeat
+            # The below code is implemented using Section 6.4
+            # Changing no_op_state to 0 to indicate the insertion of a no_op entry to the log
+            no_op_state = 0
+            currentIndex += 1
+            y = random.randint(0, 10)
+            output("## Inserting no-op message ")
+            # Inserting a no-op entry into the log at the start of a new term.
+            log.append(LogEntry(logType='LOG', index=currentIndex, key='x', value=y, term=currentTerm, client=self, command=-1, peerList=set()))
+            # Saving the no_op entry index value to later check if it has been committed or not
+            no_op_index = len(log) - 1
+        elif some(received(('AppendEntries', term, leader, _, _, _, _, _)),
+                  has= term >= currentTerm):
+            output("Elected leader:", leader, "Reverting to Follower.")
+            currentTerm = term
+            currentRole = Follower
+        elif timeout(termTimeout):
+            output("Election term", currentTerm, "timeout, restarting.")
+
+    def leader_term():
+        for server, index in nextIndex.items():
+            if has_idled or index < len(log):
+            	# Check if the server is the newly added server. Needed to check if it catching up reasonably
+                if server is newServer: # Make this None once reconfiguration is done
+                    # If it is an add serber change and it is not the final round(2), increment the round value
+                    if reconfigurationState == 0 and logAppendRound < 2:
+                        logAppendRound += 1
+                	# If it is an add server change and it is the last round, start measuring time taken for this round
+                    if reconfigurationState == 0 and logAppendRound == 2:  # Enhacement: Take threshold as input?
+                        startTime = time.time()
+
+                # Adding 'heartbeat' field in this call to indicate whether this call is a result of a heartbeat or not.
+                AppendEntriesRPC(target=server,
+                                 term=currentTerm,
+                                 leaderId=self,
+                                 prevLogIndex=index-1,
+                                 prevLogTerm=log[index-1].term,
+                                 entries=log[index:],
+                                 leaderCommit=commitIndex,
+                                 heartbeat=has_idled)
+            # If the newly added server is already up-to date with the leader's logs, it can be added to the cluster
+            elif server is newServer and reconfigurationState == 0:
+                handleReconfig(True)
+                send(('NewServerCatchUp', len(log), index), to= addMonitor)
+
+        has_idled = False
+        if await(currentRole is not Leader):
+            return
+        elif some(n in range(len(log)),
+                  has= (n > commitIndex and
+                        len(setof(i, i in matchIndex, matchIndex[i] >= n)) >
+                        len(peers) / 2 and
+                        log[n].term == currentTerm)):
+            debug("Updating commitIndex from %d to %d" % (commitIndex, n))
+            for i in range(commitIndex+1, n+1, 1):
+                savedCommits[log[i].key] = log[i].value
+            send(('SavedCommits', savedCommits), to= clients)
+
+            commitIndex = n
+
+            # Check if a no_op entry was initiated and that the no_op entry has been committed
+            # If so, update the no_op_state to indicate that the no_op entry is now committed
+            if (no_op_state == 0 and commitIndex >= no_op_index):
+                no_op_state = 1
+            send(('log_commitedIndex', commitIndex, log), to=snapshots)
+            """
+            if(commitIndex - prevSnapshotIndex > logThreshold):     ############################
+                output("BREACH")
+                send(('log_snapshot', commitIndex, log), to=snapshots)
+
+            """
+
+            # If the change was remove server and the commitIndex is higher than index at which config was appended, it has been committed by a majority of servers.
+            # Leader then sends a success message to reconfigServer process so that it can proceed to the next config change.
+            # Reset serverToRemove to None
+            if reconfigurationState == 2 and commitIndex >= reconfigurationIndex:
+                #output("## Remove Server : New configuration successfully committed to majority.")
+                send(('RemoveServerComplete', serverToRemove, True), to= addMonitor)
+                reconfigurationState = -1
+                serverToRemove = None
+            
+            # If the change was add server and the commitIndex is higher than index at which config was appended, it has been committed by a majority of servers.
+            # Leader then sends a success message to reconfigServer process so that it can proceed to the next config change.
+            # Reset newServer to None
+            if reconfigurationState == 1 and commitIndex >= reconfigurationIndex:
+                #output("## Add Server : New configuration successfully committed to majority.")
+                send(('AddServerComplete', newServer, True), to= addMonitor)
+                reconfigurationState = -1
+                newServer = None
+
+        # Idle timeout is half of normal term timeout:
+        elif timeout(termTimeout/2):
+            debug("Idle timeout triggered.")
+            has_idled = True
+
+    def handleReadOnlyHeartbeatResponse():
+        """ Helper method to handle the scenario where a heartbeat was successfully acknowledged for a read only request """
+        # Processs further only if a no_op entry is committed (indicated by the no_op_state value as 1) and a read request is not served yet
+        if no_op_state == 1 and read_requested:
+            # output("## Checking for an existing entry in the logs")
+            # Traverse the log starting from the latest entry.
+            # If 1. Current log index is lesser than the current commit index
+            #    2. Client value in the current log is available in 'latestClientReadRequest' (indicating that this Client has a pending read request)
+            #.   3. Key value in the current log is the key whose value this Client is requesting
+            # Then send the value of this key present in the current log and delete this clients request from 'latestClientReadRequest' since this request is served.
+            for i in range(len(log)-1,-1,-1):
+                if i <= commitIndex and log[i].client in latestClientReadRequest and latestClientReadRequest[log[i].client].key == log[i].key:
+                    send(('ReadReply', latestClientReadRequest[log[i].client].serial, True, log[i].value), to=log[i].client)        # Update no_op_state to -1 here?
+                    del latestClientReadRequest[log[i].client]
+            
+            # For all the remaining requests in 'latestClientReadRequest' return a False response to the appropriate client to indicate that the key was not found.
+            for entry in latestClientReadRequest.keys():
+                send(('ReadReply', latestClientReadRequest[entry].serial, False, -1), to=entry)        # Update no_op_state to -1 here? Command/serial is not known here!!
+
+            # Change this to False to indicate that all read requests are now served.
+            read_requested = False
+                
+
+
+
+    def receive(msg= ('snapshot_update', lastIndex, snaps)):
+        '''
+        # Test for correctness: loss of messages
+        if random.random() <= 0.8:    
+            send(('snapshot_update', lastIndex), to=snapshots)
+        else:
+            output('SNAPSHOT MESSAGE LOST')
+        '''
+
+        send(('snapshot_update', lastIndex), to=snapshots)
+        # Test for correctness: Only committed logs are used for snapshotting
+        if snaps[len(snaps)-1].index <= commitIndex:
+            output("CORRECTNESS PASS: Only Committed logs should be snapshotted ")
+        else:
+            output("CORRECTNESS FAIL: Only Committed logs should be snapshotted ")
+    
+
+        # Test for correctness: No loss of data after Compaction 
+        snap = {}
+        curr = {}
+        for u in snaps:
+            output(u)
+            for k in u.value.keys():
+                if k == None:
+                    continue
+                snap[k] = u.value[k]
+        for l in log:
+            if l.index > lastIndex:
+                break
+            elif l.key == None:
+                continue
+            else:
+                curr[l.key] = l.value
+        
+        shared_items = {k: curr[k] for k in curr if k in snap and snap[k] == curr[k]}
+        if len(shared_items.keys()) == len(curr.keys()):
+            output("CORRECTNESS PASS: No loss of data after Compaction ")
+        else:
+            output("CORRECTNESS FAIL: No loss of data after Compaction ")
+
+
+
+
+      
+
+    def handleReconfig(canAddServer):
+        """Method to handle addition of server. If the leader determines that new server catches up reasonably well, addition is initiated. Otherwise, it is aborted. 
+        Section 4.1 : Cluster configurations are stored and communicated using special entries in the replicated log. This leverages the existing mechanisms in Raft to replicate and persist configuration information. """
+        if not canAddServer:
+            # State denotes that reconfiguration is complete
+            reconfigurationState = -1           
+            # Inform reconfigServer process that add server change will be aborted
+            send(('AddServerComplete', newServer, False), to= addMonitor)
+            newServer = None
+        else:
+            # State denotes that change being carried out is addServer
+            reconfigurationState = 1
+            currentIndex += 1
+            # Add the log entry for reconfig change. Special entry of the type "CONFIG"
+            log.append(LogEntry(logType= "CONFIG", index= currentIndex, term=currentTerm, client=addMonitor, command=newServer, key=None, value=None, peerList=peers))
+            # Maintain index to check when reconfig log entry has been committed by majority
+            reconfigurationIndex = len(log) - 1
+
+    def receive(msg= ('RequestVote', term, candidateId,
+                      lastLogIndex, lastLogTerm)):
+        update_term(term)
+        if term < currentTerm:
+            RequestVoteReply(target=candidateId,
+                             term=currentTerm, voteGranted=False)
+        elif ((votedFor is None or votedFor == candidateId) and
+              is_up_to_date(lastLogIndex, lastLogTerm)):
+            votedFor = candidateId
+            RequestVoteReply(target=candidateId,
+                             term=currentTerm, voteGranted=True)
+        else:
+            RequestVoteReply(target=candidateId,
+                             term=currentTerm, voteGranted=False)
+
+    def receive(msg= ('RequestVoteReply', term, False)):
+        update_term(term)
+
+    def receive(msg= ('AppendEntries', term, leaderId, prevLogIndex, prevLogTerm,
+                      entries, leaderCommit, has_idled)):
+        update_term(term)
+        if term < currentTerm:
+            AppendEntriesReply(target=leaderId,
+                               term=currentTerm, success=False, heartbeat=False)
+        elif not (len(log) > prevLogIndex and
+                  log[prevLogIndex].term == prevLogTerm):
+            AppendEntriesReply(target=leaderId,
+                               term=currentTerm, success=False, heartbeat=False)
+        else:
+            last_seen_leader = leaderId
+            for idx, entry in enumerate(entries):
+                # Section 4.1 Config changes are considered to be special type of log entries. Whenever a server receives it, they update their configuration and function based on the new config.
+                if entry.logType == "CONFIG":
+                    peers.clear()
+                    # New peer list with the necessary addition/removal 
+                    for item in entry.peerList:
+                        peers.add(item)
+
+                idx += prevLogIndex + 1
+                if len(log) <= idx:
+                    log.append(entry)
+                elif log[idx].term != entry.term:
+                    del log[idx:]
+            last_new_index = prevLogIndex + len(entries)
+            if leaderCommit > commitIndex:
+                commitIndex = min(leaderCommit, last_new_index)
+            AppendEntriesReply(target=leaderId,
+                               term=currentTerm, success=True,
+                               updatedIndex=last_new_index,
+                               heartbeat=has_idled)
+
+    def receive(msg= ('AppendEntriesReply', term, success, updatedIndex, heartbeat),
+                from_=server):
+        update_term(term)
+        # Further action is only needed if we are still leader:
+        if currentRole is Leader:
+            if server == newServer:
+                # Condition number 2 to check if the new server is sufficiently caught up.
+                # Section 4.2.1 : The leader should also abort the change if the new server is unavailable or is so slow that it will never catch up.
+                # Replication of log entries is done in rounds (we consider 2 as maximum). 
+                # If the last round lasts less than an election timeout, then the leader adds the new server to the cluster, under the assumption that there are not enough unreplicated entries to create a significant availability gap.
+                if reconfigurationState == 0 and logAppendRound == 2:
+                    diffTime = time.time() - startTime # Paper also has another condition to check!!!
+                    if diffTime <= termTimeout:
+                        #output("## Reconfiguration Server : New server is sufficiently caught up. Can be added successfully now.")
+                        send(('NewServerCatchUp', len(log), updatedIndex), to= addMonitor)
+                        handleReconfig(True)
+                    else:
+                        #output("## Reconfiguration : New Server will not be added.")
+                        handleReconfig(False)
+
+            if success:
+                nextIndex[server] = updatedIndex + 1
+                matchIndex[server] = updatedIndex
+                # In case of leader removal, we check if the target server has caught up with the leader's log. If yes, we leader triggers a timeout on this target server so that it can become the new leader.
+                # Section 3.10
+                if not accepting_requests and server == target_server and matchIndex[server] == len(log) - 1:
+                    #output("## Send timeout to new leader candidate ( target server )")
+                    send(('TargetServerCatchUp', len(log), updatedIndex), to= addMonitor)
+                    send(('TimeoutNow'), to= server)
+            else:
+                # Failed because of log inconsistency:
+                nextIndex[server] -= 1
+            
+            if heartbeat:
+                # Helper method to handle the scenario where a heartbeat was successfully acknowledged for a read only request.
+                handleReadOnlyHeartbeatResponse()
+
+    def receive(msg= ('snap_exit')):
+        send(('snap_exit'), to=snapshots)
+
+    def receive(msg= ('TimeoutNow')):
+        currentRole = Candidate
+
+    def receive(msg= ('ClientRequest', serial, read_only, key, value), from_=client):
+        # Added a new boolean variable 'read_only' to indicate whether the current request is a readonly request of not.      
+        if currentRole is not Leader:
+            send(('NotLeader', serial, last_seen_leader), to=client)
+        else:
+            # Proceed further only if the Leader is accepting requests.
+            if accepting_requests is True:
+                # Introduced a separate handling for Read-only requests
+                if (read_only):                                                             
+                    #output("## Handling Read Only Request")
+                    # Forcing heartbeat. (Section 6.4 Point 3)
+                    has_idled = True
+                    # Saving the latest Read request from the client                             
+                    latestClientReadRequest[client] = ReadRequest(serial=serial, key=key)
+                    # Updating boolean variable 'read_requested' to True to indicate that a Read has been requested
+                    read_requested = True
+                else:
+                    currentIndex += 1
+                    y = value #random.randint(0, 10)
+                    for i in range(len(log)-1,-1,-1):                     
+                    # Here, check if this command is already received, if so, then return result of the original command (New feature. Put content from paper)
+                        if log[i].client == client:
+                            if log[i].command == serial:
+                                if i <= commitIndex:
+                                    send(('Reply', serial, self), to=client)
+                                    return
+                                else:
+                                    return
+                            else:
+                                break
+                    log.append(LogEntry(logType='LOG', index=currentIndex, key='x', value=y, term=currentTerm, client=client, command=serial, peerList=set()))
+
+    def handle_leader_removal():
+        """Section 3.10 
+        1. The prior leader stops accepting new client requests.
+        2. The prior leader fully updates the target server’s log to match its own, using the normal log replication mechanism described in Section 3.5.
+        3. The prior leader sends a TimeoutNow request to the target server. 
+        This request has the same effect as the target server’s election timer firing: the target server starts a new election (incrementing its term and becoming a candidate).
+	    Step 2 is carried out normally in leader_term
+	    step 3 is done in the AppendEntriesReply method
+	    """
+        accepting_requests = False
+        while True:
+            newLeaderCandidate = random.choice(list(peers))
+            if newLeaderCandidate != self :
+                target_server = newLeaderCandidate
+                #output("## New Leader Candidate ( target server )", target_server)
+                break
+
+    def handle_server_removal(server_to_remove):
+        """ Method removes a server from a cluster. The log entry for the CONFIG change triggers the removal in other processes. 
+	    On receipt of the particular entry, servers immediately shift to the new config.
+	    Section 4.1 : Cluster configurations are stored and communicated using special entries in the replicated log. This leverages the existing mechanisms in Raft to replicate and persist configuration information. """
+        send(('snap_exit'), to=server_to_remove)
+        serverToRemove = server_to_remove
+        send(('ClearPeers'), to= server_to_remove)
+        # Remove this server from Leader's peer list
+        peers.remove(server_to_remove)
+        # Delete it's index state values
+        del nextIndex[serverToRemove]
+        del matchIndex[serverToRemove]
+        # State 2 : denoteds server removal
+        reconfigurationState = 2
+        currentIndex += 1
+        # Add the log entry for reconfig change. Special entry of the type "CONFIG"
+        log.append(LogEntry(logType="CONFIG", index=currentIndex, term=currentTerm, client=addMonitor, command=server_to_remove, key=None, value=None, peerList=peers))
+        # Index value maintained to check when the config log entry has been committed by majority
+        reconfigurationIndex = len(log) - 1
+
+    def receive(msg= ('ClearPeers')):
+        """ The server to be removed is not considered a part of the majority. We clear it's peer list and force it to quit."""
+        peers.clear()
+    
+    def receive(msg= ('RemoveServer', server_to_remove), from_=reconfig_server):
+        """ Receive the removeServer Request from ReconfigServer. If this server is not a Leader, it responds with the last known Leader.
+        If the server is a Leader, it triggers the reconfig change.
+        Section 4.1 : Reply Not Leader if not a leader """
+        if currentRole is not Leader:
+            #output("## Remove Server request received by Non-Leader for Server: ", server_to_remove)
+            send(('NotLeader', server_to_remove, last_seen_leader), to=reconfig_server)
+        else:
+            #output("## Remove Server request received by Leader for Server: ", server_to_remove)
+            # Save the ReconfigServer process id to send a success/fail message at the end
+            addMonitor = reconfig_server
+            # If the server to be removed is the leader itself, it needs to take a few additional steps. Check the method handle_leader_removal()
+            if server_to_remove == self:
+                #output("## Need to remove Leader", server_to_remove)
+                handle_leader_removal()
+            else:
+                #output("## Remove Non-Leader ", server_to_remove)
+                # If server is not a leader, follow the normal flow
+                handle_server_removal(server_to_remove)
+
+    def receive(msg= ('AddServers', new_server), from_=addServer):
+        """ Receive the addServer Request from ReconfigServer. If this server is not a Leader, it responds with the last known Leader.
+        If the server is a Leader, it triggers the reconfig change.
+        Section 4.1 : Reply Not Leader if not a leader
+		Before the new server can be added, the leader checks that it is catching up with a reasonable speed. This is done in leader_term
+        """
+        if currentRole is not Leader:
+            #output("## Reconfiguration received by Non Leader", new_server)
+            send(('NotLeader', new_server, last_seen_leader), to=addServer)
+        else:
+            #output("## Reconfiguration received by Leader for Server: ", new_server)
+            newServer = new_server
+            # Save the ReconfigServer process id to send a success/fail message at the end
+            addMonitor = addServer
+            # Add the new server to the Leader's peer list.
+            peers.add(newServer)
+            # Update nextIndex and MatchIndex
+            nextIndex[newServer] = 1
+            matchIndex[newServer] = 0
+            # State 0 denoted that reconfiguration has been initiated
+            reconfigurationState = 0
+
+    def update_term(term):
+        if currentTerm < term:
+            currentTerm = term
+            votedFor = None
+            currentRole = Follower
+
+    def is_up_to_date(lastLogIndex, lastLogTerm):
+        return (lastLogTerm, lastLogIndex) >= (log[-1].term, len(log)-1)
+
+    def commit_to_state_machine():
+        entry = log[lastApplied]
+        #output(entry, " at index", lastApplied, "applied to state machine.")
+        if currentRole is Leader:
+            send(('Reply', entry.command, self), to=entry.client)
+
+    def AppendEntriesRPC(target, term, leaderId, prevLogIndex, prevLogTerm,
+                         entries, leaderCommit, heartbeat):
+        send(('AppendEntries', term, leaderId, prevLogIndex, prevLogTerm,
+              entries, leaderCommit, heartbeat), to=target)
+
+    def AppendEntriesReply(target, term, success, heartbeat, updatedIndex=None):
+        """ FIXME: 'updatedIndex' is not in original algorithm!
+        We need this additional information to pair the reply with the
+        original RPC request """
+        send(('AppendEntriesReply', term, success, updatedIndex, heartbeat), to=target)
+
+    def RequestVoteRPC(target, term, candidateId, lastLogIndex, lastLogTerm):
+        send(('RequestVote', term, candidateId, lastLogIndex, lastLogTerm),
+             to=target)
+
+    def RequestVoteReply(target, term, voteGranted):
+        send(('RequestVoteReply', term, voteGranted), to=target)
+
+    def receive(msg= ('SendPeerList'), from_=addServer):
+        send(('PeerList', peers), to=addServer)
+
+class ReadRequest:
+    def __init__(self, serial, key):
+        self.serial = serial
+        self.key = key
+
+class ReconfigServer(process):
+    """ Process to carry out any reconfiguration changes. Currently, the change is triggered after 10 seconds. Reconfiguration change is given as a list of operations to be carried out.
+    Raft Dissertation Thesis 4.1 : Raft restricts the types of changes that are allowed: only one server can be added or removed from the cluster at a time. 
+    More complex changes in membership are implemented as a series of single-server changes."""
+
+    def setup(n, oldServers, clients, send_failrate, maxTimeout):
+        self.addedServers = set()
+        self.isRemoval = False
+        self.isLeaderRemoval = False
+        self.serverCount = 0
+        self.clientCount = 0 
+        # self.count = 0
+
+    def remove_server(server_to_remove):
+        """ Emulates Remove Server RPC
+    	1. Receives not leader if reconfig request sent to some other server. Sends request to the leader then.
+    	2. Waits for a fail or success message from leader
+    	3. If successful, sends a message to client to update it's server list
+    	4. If removal is called on a cluster of 3 servers, it is rejected as it would affect the cluster availability
+    	"""
+        output("## Server to remove: ", server_to_remove)
+        target = random.choice(list(oldServers))
+        while True:
+            send(('RemoveServer', server_to_remove), to=target)
+            if await(some(received(('NotLeader', _server_to_remove, leader)),
+                          has= leader is not None)):
+                #output("## Reconfig request sent to wrong server, sending to leader", leader)
+                target = leader
+                reset("Received")
+
+            elif some(received(('RemoveServerComplete', _server_to_remove, status))):
+                if status:
+                    output("## Remove Server request for Server: ", server_to_remove, " executed successfully.")
+                    oldServers.remove(server_to_remove)
+                    send(('DeleteServer', server_to_remove), to= clients)
+                    peerListCheckMsgToServers()
+                    clientServerListCheck()
+                    break
+                else:
+                    output("## Remove Server request for Server: ", server_to_remove, " could not be removed eventually. Retrying")
+                
+            elif timeout(20): 
+                # We need to have a timeout here since the leader might crash and this server will be waiting forever for the result!!
+                target = random.choice(list(oldServers))
+
+    def add_servers():
+        """ Emulates Add Server RPC
+    	Spawns a new server to be added to the cluster.  Sends request to the leader then.
+    	1. Receives not leader if reconfig request sent to some other server.
+    	2. Waits for a fail or success message from leader
+    	3. If successful, sends a message to client to update it's server list
+    	4. If the new server could not catch up reasonably to the leader, abort the reconfig change.
+    	"""
+        timeout = maxTimeout
+        output("## Add new servers")
+        for i in range(n):
+            server = new(Server, num= 1, send= send_failrate)
+            currentServer = copy.deepcopy(list(server)[0])
+            oldServers.add(currentServer)
+            addedServers.add(currentServer)
+            # Set up and start new servers
+            setup(server, (oldServers, clients, maxTimeout, False))
+            start(server)
+            isRemoval = False
+            # Send the reconfig request to some server with the list of the additional servers
+            target = random.choice(list(oldServers))
+            while True:
+                send(('AddServers', currentServer), to=target)
+                if await(some(received(('NotLeader', _currentServer, leader)),
+                              has= leader is not None)):
+                    #output("## Reconfig request sent to wrong server, sending to leader", leader)
+                    target = leader
+                    reset("Received")
+                
+                elif some(received(('AddServerComplete', _currentServer, status))):
+                    if status:
+                        output("## Reconfiguration change : Server ", currentServer, " added successfully.")
+                        send(('NewServer', server), to= clients)
+                        peerListCheckMsgToServers()
+                        clientServerListCheck()
+                    else:
+                        output("## Reconfiguration change: Server ", currentServer, " could not be added.")
+                    break
+                
+                elif timeout(20):     
+                    # We need to have a timeout here since the leader might crash and this server will be waiting forever for the result!!
+                    target = random.choice(list(oldServers))
+
+    
+    def peerListCheckMsgToServers():
+        send(('SendPeerList'), to=list(oldServers))
+
+    def clientServerListCheck():
+        send(('ServerList', ), to= list(clients))
+
+    def receive(msg= ('PeerList', peers)):
+        if set(peers) == oldServers :
+            serverCount += 1
+        else :
+            output("## Server has the wrong peer list")
+        if serverCount == len(oldServers) :
+            serverCount = 0
+            output("## All active servers including Leader have an updated peer list. If a server was removed, it will not be a part of majority. If a server was added, it will now be a part of majority.")
+    
+    def receive(msg= ('ServerList', serverList)):
+        if set(serverList) == oldServers :
+            clientCount += 1
+        else :
+            output("## Client has the wrong server list")
+        if clientCount == len(clients) :
+            clientCount = 0
+            output("## All clients have an updated server list.")
+
+    def receive(msg=('NewServerCatchUp', leaderIndex, serverIndex)):
+        if (leaderIndex - serverIndex) < 10 :
+            output("## New Server has caught up sufficiently.")
+        else :
+            output("## New Server is too slow. Reconfiguration change might affect the cluster.")
+
+    def receive(msg=('TargetServerCatchUp', leaderIndex, serverIndex)):
+        if (leaderIndex - serverIndex) == 1 :
+            output("## Target Server has caught up sufficiently. It can be the new Leader.")
+        else :
+            output("## Target Server has not caught up sufficiently.")
+
+    def run():
+        """Triggers reconfiguration changes after 10 seconds. 
+    	Section 4.1 : Before moving on to the next configuration, we wait for the previous configuration to be successful.""" 
+        if await(False):
+            pass
+        elif(timeout(10)):
+            pass
+        reconfiguartion_change_list = ['add','remove']
+        for change in reconfiguartion_change_list :
+            if change == 'add':
+                add_servers()
+            else :
+                # If the cluster currently has only 3 servers, do not go ahead with remove.
+                if len(oldServers)>3:
+            	    server_to_remove = random.choice(list(oldServers))
+            	    remove_server(server_to_remove)
+                else :
+                    output("## Removing a server might affect availability. Aborting this change.")
+        # Send a message to the parent on reconfig change success
+        send(('Reconfiguration'), to=parent())
+        # Wait for the parent to send a kill request for the newly added servers
+        await(some(received(('KillAll'))))
+        # Send message to terminate the snapshot processes for the newly added servers
+        send(('snap_exit'), to=addedServers)
+        # Terminate the newly added servers 
+        end(addedServers) 
+        # Send a done signal to the parent
+        send(('DoneMonitor',), to=parent())
+
+class Client(process):
+    def setup(servers, nrequests, timeout):
+        self.savedCommits = {}
+
+    def receive(msg= ('DeleteServer', server)):
+        """ Client receives a message from the ReconfigServer process when server removal is successful. Client then deletes the server from it's server list.
+    	When a server is removed, it is no longer a part of majority. It would be futile for the client to send a request to this server. """
+        if server in servers:
+            servers.remove(server)
+        output("## Update Client list", servers)
+
+    def receive(msg= ('NewServer', server)):
+        """ Client receives a message from the ReconfigServer process when server addition is successful. It adds the new server to it's server list."""
+        servers.extend(list(server))
+        output("## Update Client list", servers)
+
+    def receive(msg= ('SavedCommits', savedCommits)):
+        self.savedCommits = savedCommits
+        output("SavedCommits = ", savedCommits)
+
+    def receive(msg= ('ServerList', ), from_=addServer):
+        send(('ServerList', servers), to=addServer) 
+
+    def run():
+        target = random.choice(servers)
+        req = 0
+        key = 'x'
+
+        while req < nrequests:
+            send(('ClientRequest', req, False, key, req), to=target)
+            if await(some(received(('NotLeader', _req, leader)),
+                          has= leader is not None)):
+                debug("Wrong server, changing to", leader)
+                target = leader
+                reset("Received")
+            elif some(received(('Reply', _req, _))):
+                output("Request", req + 1, "complete.")
+                req += 1
+            elif timeout(timeout/1000):
+                target = random.choice(servers)
+
+        i = 0
+        while i < nrequests:
+            --savedCommits
+            # Send Read requests to a Server with the key whose value is to be read.
+            send(('ClientRequest', i, True, key, -1), to=target)
+            # Wait until either you receive
+            # 1. 'NotLeader' response for the current request identifier or
+            # 2. 'ReadReply' containing the response from the Leader or
+            # 3. Time out and retry the same request again with a different Server as target.
+            if await(some(received(('NotLeader', _req, leader)),
+                          has= leader is not None)):
+                debug("Wrong server, changing to", leader)
+                # Client sent the Read request to a non-Leader. Re-send the request to the leader provided in response.
+                target = leader
+                reset("Received")
+            elif some(received(('ReadReply', _i, res, value))):
+                output("## Read Result", res, " ", key, " = ", value)
+                #output("SavedCommits HERE = ", savedCommits, " key is ", key, " res is ", res, " value is ", value, " savedCommits[key] is ", savedCommits[key])
+                if key in savedCommits:
+                    if res is False or value != savedCommits[key]:
+                        output("## Wrong read value fetched")
+                    else:
+                        output("## Correct read value fetched")
+                elif key not in savedCommits:
+                    if res is True or value != -1:
+                        output("## Wrong read value fetched")
+                    else:
+                        output("## Correct read value fetched")
+                # Client received the response from the Leader. Try the next request.
+                i += 1 
+            elif timeout(timeout/100):
+                target = random.choice(servers)
+
+        #Timeout added to make sure client correctness tests are passing 
+        if await(False):
+            pass
+        elif(timeout(10)):
+            pass
+
+        send(('Done',), to=parent())
+
+def main():
+    nservers = int(sys.argv[1]) if len(sys.argv) > 1 else 3
+    nclients = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+    nrequests = int(sys.argv[3]) if len(sys.argv) > 3 else 10
+    maxtimeout = int(sys.argv[4]) if len(sys.argv) > 4 else 5000
+    send_failrate = float(sys.argv[5]) if len(sys.argv) > 5 else 0.0
+    
+    servers = new(Server, num= nservers, send= send_failrate)
+    clients = new(Client, num= nclients)
+    setup(clients, (list(servers), nrequests, maxtimeout))
+    setup(servers, (servers, clients, maxtimeout, True))
+    start(servers)
+    start(clients)
+
+    # For reconfiguration, currently, the ReconfigServer process starts the reconfig change after 10 seconds. 
+    # This can be changed and integrated with a driver class to make it more dynamic.
+    # Process that spawns new servers in addition to the exisiting servers/ removes servers 
+    addMonitor = new(ReconfigServer,(1, servers, clients, send_failrate, maxtimeout))
+    start(addMonitor)
+    # Wait for the Reconfiguration Changes to be completed
+    await(some(received(('Reconfiguration'))))
+    output("## Reconfiguration response received by Main Thread")
+    # Terminate the monitor class
+    await(each(c in clients, has=received(('Done',), from_=c)))
+    output("All clients done.")
+    send(('snap_exit'), to=servers)
+    # Terminate the newly added servers
+    send(('KillAll'), to= addMonitor)
+    end(servers)
+    # Wait for the Done signal from the ReconfigServer process
+    await(some(received(('DoneMonitor',))))
+    end(addMonitor)

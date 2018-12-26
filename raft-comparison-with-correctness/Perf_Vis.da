@@ -1,0 +1,30 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
+import pandas as pd
+import seaborn as sns
+
+# import csv files
+class Perf_Vis:
+  def visualize(self):
+    df = pd.DataFrame()
+    algos = ['raft', 'raftcorrected']
+    for algo in algos:
+      df = df.append(pd.read_csv(algo+'logfile.csv'))
+    print(df)
+    plt.figure()
+    #sns.set_style("whitegrid")
+    #sns.factorplot(x='operations', y='latency', hue='program', data=df, ci = None)
+    #plt.savefig("output1.pdf")
+    #plt.figure()
+    sns.set_style("whitegrid")
+    sns.factorplot(x='runs', y='cpu_time', hue='program', data=df, ci = None)
+    plt.savefig("output6.pdf")
+    plt.figure()
+    #sns.set_style("whitegrid")
+    #sns.factorplot(x='operations', y='cpu_memory(kB)', hue='program', data=df, ci = None)
+    #plt.savefig("output3.pdf")
+
+def main():
+  perf = Perf_Vis()
+  perf.visualize()
